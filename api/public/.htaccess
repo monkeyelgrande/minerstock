@@ -1,0 +1,34 @@
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Handle X-XSRF-Token Header
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    # Redirect Trailing Slashes If Not A Folder...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # --- Backend Laravel: /api, /sanctum, /up, /storage ----------------------
+    # Estas rutas las atiende index.php (front controller de Laravel)
+    RewriteRule ^(api|sanctum|up|storage)(/.*)?$ index.php [L]
+
+    # --- Archivos estáticos reales (assets de Angular, favicon, robots) -----
+    # Si el request matchea un archivo o directorio real en public/, servirlo
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # --- Angular SPA fallback ----------------------------------------------
+    # Cualquier otra ruta -> sirve index.html (Angular Router decide qué pintar)
+    RewriteRule ^ index.html [L]
+</IfModule>

@@ -1,0 +1,52 @@
+# --- Root ---
+.idea/
+.vscode/
+*.log
+.DS_Store
+Thumbs.db
+
+# --- Laravel (api/) ---
+api/vendor/
+api/node_modules/
+api/.env
+api/.env.backup
+api/.env.production
+api/.phpunit.result.cache
+api/Homestead.json
+api/Homestead.yaml
+api/auth.json
+api/storage/*.key
+api/storage/app/public/*
+!api/storage/app/public/.gitkeep
+api/storage/framework/cache/data/*
+!api/storage/framework/cache/data/.gitkeep
+api/storage/framework/sessions/*
+!api/storage/framework/sessions/.gitkeep
+api/storage/framework/views/*
+!api/storage/framework/views/.gitkeep
+api/storage/logs/*
+!api/storage/logs/.gitkeep
+api/bootstrap/cache/*.php
+api/public/hot
+api/public/storage
+
+# Build de Angular copiada a api/public/ por deploy.sh (no commitear)
+api/public/spa/
+api/public/index.html
+api/public/*.js
+api/public/*.css
+api/public/assets/
+api/public/media/
+# Mantenemos api/public/index.php (entry de Laravel) y .htaccess
+
+# --- Angular (web/) ---
+web/node_modules/
+web/dist/
+web/.angular/
+web/.nx/
+web/coverage/
+web/tmp/
+web/out-tsc/
+web/bazel-out/
+web/*.log
+web/.env.local
