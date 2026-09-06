@@ -1,0 +1,96 @@
+<app-page-header title="Unidades de medida" subtitle="Unidades en las que se compran y consumen los productos" [crumbs]="[{ label: 'Catálogo' }, { label: 'Unidades' }]" />
+
+<app-crud-toolbar
+  [(search)]="search"
+  [(active)]="active"
+  searchPlaceholder="Buscar por código o nombre…"
+  [createLabel]="auth.can('units.create') ? 'Nueva unidad' : null"
+  (create)="openCreate()"
+/>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="code"
+    [sortOrder]="1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="code" class="w-32">Código <p-sortIcon field="code" /></th>
+        <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+        <th class="w-32">Decimales</th>
+        <th class="w-28">Estado</th>
+        <th class="w-28 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td class="tabular font-medium text-ink">{{ row.code }}</td>
+        <td>{{ row.name }}</td>
+        <td>
+          <span class="chip" [class.chip-success]="row.allows_decimals" [class.chip-draft]="!row.allows_decimals">
+            {{ row.allows_decimals ? 'Sí' : 'No' }}
+          </span>
+        </td>
+        <td><app-active-chip [active]="row.is_active" /></td>
+        <td class="text-right whitespace-nowrap">
+          @if (auth.can('units.update')) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="openEdit(row)" />
+            <p-button [icon]="row.is_active ? 'pi pi-ban' : 'pi pi-check'" [text]="true" [rounded]="true" severity="secondary" size="small" [pTooltip]="row.is_active ? 'Desactivar' : 'Activar'" (onClick)="toggleActive(row)" />
+          }
+          @if (auth.can('units.delete')) {
+            <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Eliminar" (onClick)="confirmDelete(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="5" class="text-center py-10 text-ink-3">No hay unidades que coincidan con la búsqueda.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<app-form-drawer
+  [(visible)]="drawerOpen"
+  [title]="editing() ? 'Editar unidad' : 'Nueva unidad'"
+  [subtitle]="editing()?.name"
+  [saving]="saving()"
+  (save)="save()"
+>
+  <ng-container [formGroup]="form">
+    <div class="grid grid-cols-3 gap-3">
+      <app-field label="Código" [required]="true" hint="Solo letras y números, máx. 10." [control]="form.controls['code']" [serverError]="err('code')" [submitted]="submitted()">
+        <input pInputText formControlName="code" class="w-full uppercase" maxlength="10" placeholder="KG" />
+      </app-field>
+      <div class="col-span-2">
+        <app-field label="Nombre" [required]="true" [control]="form.controls['name']" [serverError]="err('name')" [submitted]="submitted()">
+          <input pInputText formControlName="name" class="w-full" placeholder="Kilogramo" />
+        </app-field>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 pt-1">
+      <p-toggleswitch formControlName="allows_decimals" inputId="unit_decimals" />
+      <label for="unit_decimals" class="text-sm">Permite decimales</label>
+    </div>
+    @if (err('allows_decimals'); as e) {
+      <p class="field-error">{{ e }}</p>
+    }
+    <div class="flex items-center gap-3 pt-1">
+      <p-toggleswitch formControlName="is_active" inputId="unit_active" />
+      <label for="unit_active" class="text-sm">Unidad activa</label>
+    </div>
+  </ng-container>
+</app-form-drawer>

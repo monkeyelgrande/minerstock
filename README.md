@@ -1,34 +1,41 @@
-# monkeystechnology.com
+# MinerStock
 
-Vitrina personal-tech de Monkeys Technology: feed del canal de YouTube `@monkeystechnology` + reviews de productos tech.
+Sistema de control de compras, bodegas y logística para una empresa minera con varias bodegas (municipio y minas).
 
-**Stack:** Laravel 13 (API REST, `api/`) + Angular 21 SPA (`web/`) + MySQL.
-**Hosting prod:** Virtualmin sub-server de `monkeyscompany.com` (Ubuntu 24.04 LTS).
-**Auth admin:** Laravel Sanctum (tokens).
+**Stack:** Laravel 13 (API REST, `api/`) + Angular 21 SPA (`web/`, Tailwind 4 + PrimeNG 21) + MySQL 8.
+**Auth:** Laravel Sanctum (tokens) + roles y permisos con `spatie/laravel-permission`.
+
+Documentación de planeamiento en [`docs/`](docs/):
+
+| Doc | Contenido |
+|---|---|
+| [01-propuesta-inicial.md](docs/01-propuesta-inicial.md) | Alcance, decisiones, flujo de documentos, fases |
+| [02-modelo-de-datos.md](docs/02-modelo-de-datos.md) | Tablas, campos y reglas de negocio |
+| [03-modulos-y-pantallas.md](docs/03-modulos-y-pantallas.md) | Pantallas por módulo y matriz de permisos |
+| [04-prompts-stitch.md](docs/04-prompts-stitch.md) | Prompts usados para el diseño en Stitch |
+| [05-design-system.md](docs/05-design-system.md) | Tokens del sistema de diseño (colores, tipografía, componentes) |
 
 ---
 
 ## Estructura
 
 ```
-monkeystechnology/
+minerstock/
 ├── api/                Laravel 13 — API REST (rutas /api/*)
 ├── web/                Angular 21 SPA — consume la API
+├── docs/               Planeamiento y diseño
 ├── deploy.sh           Script de deploy (correr en servidor)
-├── .gitignore
 └── README.md
 ```
 
 ## Desarrollo local (Laragon, Windows)
 
-**Pre-requisitos:** PHP 8.3+, Composer, Node 20+, MySQL (incluido en Laragon).
+**Pre-requisitos:** PHP 8.3+, Composer, Node 20+, MySQL 8 (incluido en Laragon).
 
 ### 1) Base de datos
 
-Crear DB vacía en MySQL local:
-
 ```sql
-CREATE DATABASE monkeystechnology CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE minerstock CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 ### 2) API (Laravel)
@@ -38,11 +45,22 @@ cd api
 composer install
 cp .env.example .env       # solo la primera vez
 php artisan key:generate   # solo la primera vez
-php artisan migrate --seed
+php artisan migrate --seed # crea roles, unidades, consecutivos, admin y datos demo (solo en local)
 php artisan serve          # http://localhost:8000
 ```
 
 Verifica: `http://localhost:8000/api/health` → JSON `{"status":"ok",...}`.
+
+**Usuarios sembrados (solo entorno local):**
+
+| Usuario / correo | Contraseña | Rol |
+|---|---|---|
+| `admin` (o admin@minerstock.local) | changeme | Administrador |
+| comprador (comprador@minerstock.local) | password | Comprador |
+| aprobador (aprobador@minerstock.local) | password | Aprobador |
+| bodeguero (bodeguero@minerstock.local) | password | Bodeguero + Solicitante |
+| tesoreria (tesoreria@minerstock.local) | password | Tesorería |
+| consulta (consulta@minerstock.local) | password | Consulta |
 
 ### 3) SPA (Angular)
 
@@ -52,22 +70,37 @@ npm install
 npm start                  # http://localhost:4200
 ```
 
-Angular dev server proxea `/api` a Laravel vía `web/proxy.conf.json`.
+El dev server proxea `/api` a Laravel vía `web/proxy.conf.json`.
 
-## Endpoints públicos
+## API
+
+Todas las rutas van bajo `/api`. Salvo `health` y `auth/login`, requieren `Authorization: Bearer <token>`.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/api/health` | smoke test (incluye check de DB) |
-| GET | `/api/categories` | listado de categorías con conteo de reviews publicadas |
-| GET | `/api/categories/{slug}` | detalle de categoría |
-| GET | `/api/reviews` | reviews publicadas, paginadas (`?category=`, `?featured=1`, `?per_page=`) |
-| GET | `/api/reviews/{slug}` | detalle de review (incluye body y galería) |
-| GET | `/api/videos` | videos curados del canal (`?featured=1`, `?limit=`) |
-| GET | `/api/videos/{youtube_id}` | detalle de video |
-| GET | `/api/me` | usuario autenticado (requiere `auth:sanctum`) |
+| GET | `/health` | smoke test (incluye check de DB) |
+| POST | `/auth/login` | `{login, password}` (usuario o correo) → `{token, user}` |
+| GET | `/auth/me` | usuario, roles, permisos y bodegas |
+| POST | `/auth/logout` | revoca el token actual |
+| PUT | `/auth/profile`, `/auth/password` | perfil y contraseña propios |
+| CRUD | `/catalog/{sites,warehouses,units,product-categories,products,suppliers,vehicles,drivers,cost-centers,recipients}` | maestros (`?search=&active=&sort=&dir=&page=&per_page=&all=1`) |
+| CRUD | `/admin/users` (+ `POST /admin/users/{id}/reset-password`) | usuarios, roles y bodegas asignadas |
+| GET/PUT | `/admin/roles`, `/admin/permissions` | matriz rol × permiso |
+| GET/PUT | `/admin/settings`, `/admin/document-sequences` | datos de empresa, IVA, consecutivos |
 
-Endpoints de admin (POST/PUT/DELETE) viven bajo `auth:sanctum` — pendientes.
+Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.create`, …) y se verifican con el middleware `permission:`.
+
+## Estado del proyecto
+
+| Fase | Contenido | Estado |
+|---|---|---|
+| 0 | Base: login, roles, layout, maestros, usuarios, configuración | ✅ |
+| 1 | Compras: solicitudes con aprobación, cotizaciones, comparativa, OC | pendiente |
+| 2 | Inventario municipio: recepciones, kardex, stock, devoluciones, ajustes | pendiente |
+| 3 | Cuentas por pagar | pendiente |
+| 4 | Logística: planillas, recepción en mina, novedades | pendiente |
+| 5 | Consumo en mina: vales, préstamos | pendiente |
+| 6 | Dashboards, reportes, notificaciones | pendiente |
 
 ## Deploy a producción
 
@@ -77,40 +110,8 @@ Flujo:
 # Local
 git add . && git commit -m "..." && git push origin main
 
-# Server
-ssh monkeyscompany "cd ~/repos/monkeystechnology && bash deploy.sh"
+# Servidor
+cd ~/repos/minerstock && bash deploy.sh
 ```
 
-`deploy.sh` hace: pull → composer install (si cambió) → npm ci (si cambió) → `ng build` prod → copia dist Angular a `api/public/` → `php artisan migrate` → re-cachea → smoke test.
-
-**Primera vez en el servidor** (configurar una sola vez):
-
-1. `git clone` el repo en `~/repos/monkeystechnology/`.
-2. Crear `api/.env` de producción (perms 600, `APP_ENV=production`, `APP_DEBUG=false`, credenciales MySQL del Virtualmin padre).
-3. En Virtualmin → Server Configuration → Website Options → Document Root = `/home/monkeyscompany/repos/monkeystechnology/api/public`.
-4. Verificar Let's Encrypt cubre `monkeystechnology.com` y `caja.monkeystechnology.com`.
-5. Primer `composer install` y `php artisan migrate` manuales (luego `deploy.sh` se encarga).
-
-Detalles en [`deploy.sh`](./deploy.sh).
-
----
-
-## Usar este repo como template para otro proyecto
-
-Esta base (Laravel API + Angular SPA + Sanctum + deploy.sh para Virtualmin) está pensada para reusarse. Para forkear:
-
-1. **En GitHub:** Settings del repo → "Template repository" → click "Use this template" desde el botón verde.
-2. **Clonar el repo nuevo y limpiar referencias específicas:**
-
-   | Archivo | Qué cambiar |
-   |---|---|
-   | `deploy.sh` | `PROJECT_NAME` y `PROJECT_DOMAIN` en el bloque `PROJECT CONFIG` |
-   | `api/.env.example` | `APP_NAME`, `DB_DATABASE`, `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS` |
-   | `api/database/seeders/DatabaseSeeder.php` | Borrar / reemplazar contenido demo (categorías, review de ThinkPad, video Rick Roll) |
-   | `README.md` | Este archivo |
-   | `api/composer.json` `name` (opcional) | `vendor/proyecto` |
-   | `web/package.json` `name` (opcional) | nombre del proyecto |
-
-3. Crear DB local con el nombre nuevo, `composer install`, `npm install`, `php artisan key:generate`, `php artisan migrate --seed`.
-
-Lo que NO necesitas tocar (es genérico): controllers, resources, models (Category/Review/Video), `.htaccess`, estructura de carpetas, `proxy.conf.json`.
+`deploy.sh` hace pull, instala dependencias si cambiaron los locks, construye Angular, copia el `dist` a `api/public/`, corre migraciones y cachea config/rutas.

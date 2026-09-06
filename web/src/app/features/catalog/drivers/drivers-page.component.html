@@ -1,0 +1,138 @@
+<app-page-header title="Choferes" subtitle="Conductores autorizados para los despachos" [crumbs]="[{ label: 'Catálogo' }, { label: 'Choferes' }]" />
+
+<app-crud-toolbar
+  [(search)]="search"
+  [(active)]="active"
+  searchPlaceholder="Buscar por documento, nombre o licencia…"
+  [createLabel]="auth.can('drivers.create') ? 'Nuevo chofer' : null"
+  (create)="openCreate()"
+/>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="name"
+    [sortOrder]="1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="document_number" class="w-36">Documento <p-sortIcon field="document_number" /></th>
+        <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+        <th>Licencia</th>
+        <th pSortableColumn="license_expires_at" class="w-40">Vence <p-sortIcon field="license_expires_at" /></th>
+        <th class="w-28">Estado</th>
+        <th class="w-28 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td class="tabular text-ink-2">{{ row.document_number }}</td>
+        <td>
+          <div class="font-medium text-ink">{{ row.name }}</div>
+          @if (row.phone) {
+            <div class="text-xs text-ink-3">{{ row.phone }}</div>
+          }
+        </td>
+        <td>
+          @if (row.license_number || row.license_category) {
+            <span class="tabular">{{ row.license_number || '—' }}</span>
+            @if (row.license_category) {
+              <span class="chip chip-draft ml-2 !text-[10px] !py-0">{{ row.license_category }}</span>
+            }
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td>
+          @switch (licenseStatus(row.license_expires_at)) {
+            @case ('expired') {
+              <span class="chip chip-danger" [pTooltip]="formatDate(row.license_expires_at)">Vencida</span>
+            }
+            @case ('soon') {
+              <span class="chip chip-partial" [pTooltip]="formatDate(row.license_expires_at)">Por vencer</span>
+              <div class="text-xs text-ink-3 mt-0.5 tabular">{{ formatDate(row.license_expires_at) }}</div>
+            }
+            @case ('ok') {
+              <span class="tabular">{{ formatDate(row.license_expires_at) }}</span>
+            }
+            @default {
+              <span class="text-ink-3">—</span>
+            }
+          }
+        </td>
+        <td><app-active-chip [active]="row.is_active" /></td>
+        <td class="text-right whitespace-nowrap">
+          @if (auth.can('drivers.update')) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="openEdit(row)" />
+            <p-button [icon]="row.is_active ? 'pi pi-ban' : 'pi pi-check'" [text]="true" [rounded]="true" severity="secondary" size="small" [pTooltip]="row.is_active ? 'Desactivar' : 'Activar'" (onClick)="toggleActive(row)" />
+          }
+          @if (auth.can('drivers.delete')) {
+            <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Eliminar" (onClick)="confirmDelete(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="6" class="text-center py-10 text-ink-3">No hay choferes que coincidan con la búsqueda.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<app-form-drawer
+  [(visible)]="drawerOpen"
+  [title]="editing() ? 'Editar chofer' : 'Nuevo chofer'"
+  [subtitle]="editing()?.name"
+  [saving]="saving()"
+  (save)="save()"
+>
+  <ng-container [formGroup]="form">
+    <app-field label="Documento" [required]="true" [control]="form.controls['document_number']" [serverError]="err('document_number')" [submitted]="submitted()">
+      <input pInputText formControlName="document_number" class="w-full" placeholder="1020304050" />
+    </app-field>
+    <app-field label="Nombre" [required]="true" [control]="form.controls['name']" [serverError]="err('name')" [submitted]="submitted()">
+      <input pInputText formControlName="name" class="w-full" />
+    </app-field>
+    <app-field label="Teléfono" [serverError]="err('phone')">
+      <input pInputText formControlName="phone" class="w-full" placeholder="300 123 4567" />
+    </app-field>
+    <div class="grid grid-cols-3 gap-3">
+      <div class="col-span-2">
+        <app-field label="N.° de licencia" [serverError]="err('license_number')">
+          <input pInputText formControlName="license_number" class="w-full" />
+        </app-field>
+      </div>
+      <app-field label="Categoría" [serverError]="err('license_category')">
+        <p-select formControlName="license_category" [options]="licenseCategories" optionLabel="label" optionValue="value" [showClear]="true" placeholder="—" styleClass="w-full" />
+      </app-field>
+    </div>
+    <app-field label="Vencimiento de licencia" [control]="form.controls['license_expires_at']" [serverError]="err('license_expires_at')" [submitted]="submitted()">
+      <p-datepicker
+        formControlName="license_expires_at"
+        dateFormat="dd/mm/yy"
+        [showIcon]="true"
+        [showClear]="true"
+        appendTo="body"
+        placeholder="dd/mm/aaaa"
+        styleClass="w-full"
+        inputStyleClass="w-full"
+      />
+    </app-field>
+    <div class="flex items-center gap-3 pt-1">
+      <p-toggleswitch formControlName="is_active" inputId="drv_active" />
+      <label for="drv_active" class="text-sm">Chofer activo</label>
+    </div>
+  </ng-container>
+</app-form-drawer>

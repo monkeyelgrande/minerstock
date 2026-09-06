@@ -1,0 +1,159 @@
+<div class="min-h-screen flex flex-row">
+  <!-- Panel izquierdo -->
+  <div class="hidden lg:flex w-[45%] bg-shell text-white p-12 xl:p-16 flex-col justify-between relative overflow-hidden">
+    <div class="absolute -top-32 -left-32 w-96 h-96 bg-brand opacity-10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute -bottom-20 -right-20 w-80 h-80 bg-shell-2 opacity-40 rounded-full blur-2xl pointer-events-none"></div>
+    <div
+      class="absolute inset-0 opacity-[0.06] pointer-events-none"
+      style="background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 40px 40px"
+    ></div>
+
+    <div class="relative z-10">
+      <div class="flex items-center gap-3.5 mb-8">
+        <div class="w-12 h-12 rounded-xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand">
+          <span class="material-symbols-outlined !text-[28px]">hardware</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-3xl font-bold tracking-tight">Miner<span class="text-brand">Stock</span></span>
+          <span class="text-[11px] font-semibold uppercase tracking-widest text-shell-muted">ERP Minero Integrado</span>
+        </div>
+      </div>
+      <h1 class="text-2xl xl:text-3xl font-semibold text-slate-100 leading-snug max-w-md">
+        Control de compras, bodegas y logística minera
+      </h1>
+      <p class="mt-3 text-sm text-slate-400 max-w-sm leading-relaxed">
+        Del pedido en la mina al vale de salida, con trazabilidad completa.
+      </p>
+    </div>
+
+    <div class="relative z-10 space-y-6 my-10 max-w-md">
+      <div class="flex items-start gap-4">
+        <div class="w-10 h-10 rounded-lg bg-shell-2 border border-slate-700/70 flex items-center justify-center text-brand shrink-0">
+          <span class="material-symbols-outlined">verified</span>
+        </div>
+        <div>
+          <h3 class="text-base font-semibold text-slate-200">Compras con aprobación</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Solicitudes, comparativa de cotizaciones y órdenes de compra aprobadas.</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-4">
+        <div class="w-10 h-10 rounded-lg bg-shell-2 border border-slate-700/70 flex items-center justify-center text-brand shrink-0">
+          <span class="material-symbols-outlined">layers</span>
+        </div>
+        <div>
+          <h3 class="text-base font-semibold text-slate-200">Stock valorizado por bodega</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Kardex, costo promedio y alertas de mínimos en municipio y minas.</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-4">
+        <div class="w-10 h-10 rounded-lg bg-shell-2 border border-slate-700/70 flex items-center justify-center text-brand shrink-0">
+          <span class="material-symbols-outlined">local_shipping</span>
+        </div>
+        <div>
+          <h3 class="text-base font-semibold text-slate-200">Planillas de viaje y recepción en mina</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Vehículo, chofer, tránsito y novedades al recibir.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="relative z-10 pt-6 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+      <span class="flex items-center gap-2">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+        Sistema operativo
+      </span>
+      <span class="text-slate-500">Bodega &amp; Mina</span>
+    </div>
+  </div>
+
+  <!-- Formulario -->
+  <div class="flex-1 bg-white flex flex-col justify-between items-center px-8 py-10 lg:px-16 min-h-screen">
+    <div class="w-full flex items-center justify-between lg:justify-end">
+      <div class="flex items-center gap-2 lg:hidden">
+        <span class="material-symbols-outlined text-brand">hardware</span>
+        <span class="text-lg font-bold">Miner<span class="text-brand">Stock</span></span>
+      </div>
+    </div>
+
+    <div class="w-full max-w-[400px] my-auto">
+      <div class="mb-8">
+        <h2 class="text-2xl font-bold tracking-tight text-slate-900 mb-2">Iniciar sesión</h2>
+        <p class="text-sm text-slate-500">Ingresa tus credenciales para acceder al sistema.</p>
+      </div>
+
+      <form class="space-y-5" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        @if (error(); as msg) {
+          <div class="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+            <span class="material-symbols-outlined !text-[18px] mt-px">error</span>
+            <span>{{ msg }}</span>
+          </div>
+        }
+
+        <div>
+          <label for="login" class="field-label">Usuario o correo electrónico</label>
+          <input
+            id="login"
+            type="text"
+            formControlName="login"
+            autocomplete="username"
+            placeholder="admin o usuario@empresa.com"
+            class="w-full h-10 px-3.5 text-sm bg-white border border-line-strong rounded-lg text-slate-900 placeholder:text-placeholder focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition-all"
+            [class.border-red-400]="form.controls.login.touched && form.controls.login.invalid"
+          />
+          @if (form.controls.login.touched && form.controls.login.invalid) {
+            <p class="field-error">Ingresa tu usuario o correo.</p>
+          }
+        </div>
+
+        <div>
+          <label for="password" class="field-label">Contraseña</label>
+          <div class="relative flex items-center">
+            <input
+              id="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              formControlName="password"
+              autocomplete="current-password"
+              placeholder="••••••••"
+              class="w-full h-10 pl-3.5 pr-10 text-sm bg-white border border-line-strong rounded-lg text-slate-900 placeholder:text-placeholder focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition-all"
+              [class.border-red-400]="form.controls.password.touched && form.controls.password.invalid"
+            />
+            <button
+              type="button"
+              class="absolute right-2 p-1 text-slate-400 hover:text-slate-600"
+              (click)="showPassword.set(!showPassword())"
+              aria-label="Mostrar u ocultar contraseña"
+            >
+              <span class="material-symbols-outlined">{{ showPassword() ? 'visibility_off' : 'visibility' }}</span>
+            </button>
+          </div>
+          @if (form.controls.password.touched && form.controls.password.invalid) {
+            <p class="field-error">Ingresa tu contraseña.</p>
+          }
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" formControlName="remember" class="w-4 h-4 rounded border-gray-300 accent-brand" />
+            <span class="text-sm text-slate-600">Recordarme</span>
+          </label>
+          <span class="text-sm text-slate-400" title="Disponible próximamente">¿Olvidaste tu contraseña?</span>
+        </div>
+
+        <button
+          type="submit"
+          [disabled]="loading()"
+          class="w-full h-10 mt-2 bg-brand hover:bg-brand-hover disabled:opacity-60 text-ink font-semibold text-sm rounded-lg flex items-center justify-center gap-2 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
+        >
+          @if (loading()) {
+            <span class="material-symbols-outlined !text-[18px] animate-spin">progress_activity</span>
+            <span>Ingresando…</span>
+          } @else {
+            <span>Ingresar</span>
+            <span class="material-symbols-outlined !text-[18px]">arrow_forward</span>
+          }
+        </button>
+      </form>
+    </div>
+
+    <footer class="w-full text-center text-xs text-slate-400 pt-4">© {{ year }} MinerStock. Todos los derechos reservados.</footer>
+  </div>
+</div>

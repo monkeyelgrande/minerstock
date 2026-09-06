@@ -1,0 +1,90 @@
+<app-page-header title="Categorías de producto" subtitle="Agrupación jerárquica de los productos del inventario" [crumbs]="[{ label: 'Catálogo' }, { label: 'Categorías' }]" />
+
+<app-crud-toolbar
+  [(search)]="search"
+  [(active)]="active"
+  searchPlaceholder="Buscar por nombre…"
+  [createLabel]="auth.can('product_categories.create') ? 'Nueva categoría' : null"
+  (create)="openCreate()"
+/>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="name"
+    [sortOrder]="1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+        <th>Categoría padre</th>
+        <th class="w-32 text-right">Productos</th>
+        <th class="w-28">Estado</th>
+        <th class="w-28 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td class="font-medium text-ink">{{ row.name }}</td>
+        <td class="text-ink-2">{{ row.parent?.name || '—' }}</td>
+        <td class="tabular text-right">{{ row.products_count ?? 0 }}</td>
+        <td><app-active-chip [active]="row.is_active" /></td>
+        <td class="text-right whitespace-nowrap">
+          @if (auth.can('product_categories.update')) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="openEdit(row)" />
+            <p-button [icon]="row.is_active ? 'pi pi-ban' : 'pi pi-check'" [text]="true" [rounded]="true" severity="secondary" size="small" [pTooltip]="row.is_active ? 'Desactivar' : 'Activar'" (onClick)="toggleActive(row)" />
+          }
+          @if (auth.can('product_categories.delete')) {
+            <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Eliminar" (onClick)="confirmDelete(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="5" class="text-center py-10 text-ink-3">No hay categorías que coincidan con la búsqueda.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<app-form-drawer
+  [(visible)]="drawerOpen"
+  [title]="editing() ? 'Editar categoría' : 'Nueva categoría'"
+  [subtitle]="editing()?.name"
+  [saving]="saving()"
+  (save)="save()"
+>
+  <ng-container [formGroup]="form">
+    <app-field label="Nombre" [required]="true" [control]="form.controls['name']" [serverError]="err('name')" [submitted]="submitted()">
+      <input pInputText formControlName="name" class="w-full" placeholder="Ej. Explosivos" />
+    </app-field>
+    <app-field label="Categoría padre" hint="Déjalo vacío para una categoría de primer nivel." [control]="form.controls['parent_id']" [serverError]="err('parent_id')" [submitted]="submitted()">
+      <p-select
+        formControlName="parent_id"
+        [options]="parentOptions()"
+        optionLabel="name"
+        optionValue="id"
+        [showClear]="true"
+        [filter]="parentOptions().length > 8"
+        placeholder="Sin categoría padre"
+        styleClass="w-full"
+      />
+    </app-field>
+    <div class="flex items-center gap-3 pt-1">
+      <p-toggleswitch formControlName="is_active" inputId="cat_active" />
+      <label for="cat_active" class="text-sm">Categoría activa</label>
+    </div>
+  </ng-container>
+</app-form-drawer>

@@ -1,0 +1,334 @@
+<app-page-header
+  [title]="title()"
+  [subtitle]="isEdit() ? 'SKU ' + (product()?.sku ?? '') : 'Registra un nuevo producto del catálogo'"
+  [crumbs]="[{ label: 'Catálogo' }, { label: 'Productos', route: '/catalogo/productos' }, { label: isEdit() ? (product()?.name ?? '…') : 'Nuevo' }]"
+>
+  @if (isEdit() && product(); as p) {
+    <span chip class="chip" [class.chip-success]="p.is_active" [class.chip-draft]="!p.is_active">{{ p.is_active ? 'Activo' : 'Inactivo' }}</span>
+  }
+  <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancel()" />
+  @if (canEdit()) {
+    <p-button [label]="isEdit() ? 'Guardar cambios' : 'Crear producto'" icon="pi pi-check" [loading]="saving()" [disabled]="loading()" (onClick)="save()" />
+  }
+</app-page-header>
+
+<form [formGroup]="form" (ngSubmit)="save()" novalidate>
+  <p-tabs [value]="activeTab()" (valueChange)="activeTab.set($any($event))">
+    <p-tablist>
+      <p-tab value="general">Datos generales</p-tab>
+      <p-tab value="units">
+        Unidades alternas
+        @if (unitsArray.length) {
+          <span class="ml-1.5 chip chip-draft !h-5 !px-1.5">{{ unitsArray.length }}</span>
+        }
+      </p-tab>
+      <p-tab value="warehouses">
+        Parámetros por bodega
+        @if (warehouseArray.length) {
+          <span class="ml-1.5 chip chip-draft !h-5 !px-1.5">{{ warehouseArray.length }}</span>
+        }
+      </p-tab>
+    </p-tablist>
+
+    <p-tabpanels class="!bg-transparent !p-0 !pt-4">
+      <!-- ================= Datos generales ================= -->
+      <p-tabpanel value="general">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Datos generales</span>
+            @if (loading()) {
+              <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</span>
+            }
+          </div>
+          <div class="card-body grid grid-cols-1 md:grid-cols-2 gap-4">
+            <app-field label="SKU" [required]="true" hint="Código interno único del producto." [control]="form.controls.sku" [serverError]="err('sku')" [submitted]="submitted()">
+              <input pInputText formControlName="sku" class="w-full tabular uppercase" placeholder="Ej. FIL-ACE-001" />
+            </app-field>
+            <app-field label="Nombre" [required]="true" [control]="form.controls.name" [serverError]="err('name')" [submitted]="submitted()">
+              <input pInputText formControlName="name" class="w-full" placeholder="Nombre comercial del producto" />
+            </app-field>
+
+            <app-field label="Categoría" [control]="form.controls.category_id" [serverError]="err('category_id')" [submitted]="submitted()">
+              <p-select
+                formControlName="category_id"
+                [options]="categories()"
+                optionLabel="name"
+                optionValue="id"
+                placeholder="Sin categoría"
+                [showClear]="true"
+                [filter]="categories().length > 8"
+                filterPlaceholder="Buscar categoría…"
+                styleClass="w-full"
+              />
+            </app-field>
+            <app-field label="Tipo" [required]="true" hint="Los retornables (herramientas, equipos) se prestan y deben devolverse." [control]="form.controls.kind" [serverError]="err('kind')" [submitted]="submitted()">
+              <p-selectbutton formControlName="kind" [options]="kindOptions" optionLabel="label" optionValue="value" [allowEmpty]="false" />
+            </app-field>
+
+            <app-field label="Unidad base" [required]="true" hint="Unidad en la que se guarda el stock." [control]="form.controls.base_unit_id" [serverError]="err('base_unit_id')" [submitted]="submitted()">
+              <p-select
+                formControlName="base_unit_id"
+                [options]="units()"
+                optionLabel="label"
+                optionValue="id"
+                placeholder="Selecciona una unidad"
+                [filter]="units().length > 8"
+                filterPlaceholder="Buscar unidad…"
+                styleClass="w-full"
+              />
+            </app-field>
+            <app-field label="Stock mínimo por defecto" hint="Se usa en las bodegas sin parámetros propios." [control]="form.controls.default_min_stock" [serverError]="err('default_min_stock')" [submitted]="submitted()">
+              <p-inputnumber
+                formControlName="default_min_stock"
+                mode="decimal"
+                [min]="0"
+                [minFractionDigits]="0"
+                [maxFractionDigits]="3"
+                [suffix]="baseUnit() ? ' ' + baseUnit()!.code : ''"
+                styleClass="w-full"
+                inputStyleClass="w-full tabular"
+              />
+            </app-field>
+
+            <app-field label="Código de barras" [serverError]="err('barcode')">
+              <input pInputText formControlName="barcode" class="w-full tabular" placeholder="EAN / UPC (opcional)" />
+            </app-field>
+            <div class="flex items-center gap-3 md:pt-7">
+              <p-toggleswitch formControlName="is_active" inputId="prod_active" />
+              <label for="prod_active" class="text-sm">Producto activo</label>
+            </div>
+
+            <div class="md:col-span-2">
+              <app-field label="Descripción" [serverError]="err('description')">
+                <textarea pTextarea formControlName="description" rows="3" class="w-full" placeholder="Especificaciones, marca, referencia del fabricante…"></textarea>
+              </app-field>
+            </div>
+          </div>
+        </div>
+      </p-tabpanel>
+
+      <!-- ================= Unidades alternas ================= -->
+      <p-tabpanel value="units">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Unidades alternas</div>
+              <p class="text-xs text-ink-3 mt-0.5">
+                El stock siempre se guarda en la unidad base. Al comprar o entregar en otra unidad, el sistema convierte usando el factor.
+              </p>
+            </div>
+            @if (canEdit()) {
+              <p-button label="Agregar unidad" icon="pi pi-plus" severity="secondary" [outlined]="true" size="small" [disabled]="!form.controls.base_unit_id.value" (onClick)="addUnit()" />
+            }
+          </div>
+
+          @if (!form.controls.base_unit_id.value) {
+            <div class="card-body text-sm text-ink-3">Primero selecciona la <span class="font-medium text-ink">unidad base</span> en Datos generales.</div>
+          } @else if (!unitsArray.length) {
+            <div class="card-body text-sm text-ink-3 text-center py-10">
+              Este producto no tiene unidades alternas. Se compra y entrega únicamente en <span class="font-semibold text-ink">{{ baseUnit()?.code }}</span>.
+            </div>
+          } @else {
+            <div class="overflow-x-auto" formArrayName="units">
+              <table class="w-full">
+                <thead>
+                  <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                    <th class="th-label text-left px-5 py-2.5 w-72">Unidad</th>
+                    <th class="th-label text-left px-4 py-2.5 w-56">Factor</th>
+                    <th class="th-label text-left px-4 py-2.5">Equivalencia</th>
+                    <th class="th-label text-center px-4 py-2.5 w-44">Uso por defecto en compras</th>
+                    <th class="w-14"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (g of unitsArray.controls; track g; let i = $index) {
+                    <tr [formGroupName]="i" class="border-b border-line last:border-b-0 align-top">
+                      <td class="px-5 py-3">
+                        <p-select
+                          formControlName="unit_id"
+                          [options]="unitOptionsByRow()[i]"
+                          optionLabel="label"
+                          optionValue="id"
+                          placeholder="Selecciona unidad"
+                          appendTo="body"
+                          styleClass="w-full"
+                        />
+                        @if (err('units.' + i + '.unit_id'); as e) {
+                          <p class="field-error">{{ e }}</p>
+                        } @else if ((submitted() || g.controls['unit_id'].touched) && g.controls['unit_id'].invalid) {
+                          <p class="field-error">Selecciona una unidad.</p>
+                        }
+                      </td>
+                      <td class="px-4 py-3">
+                        <p-inputnumber
+                          formControlName="factor"
+                          mode="decimal"
+                          [min]="0.0001"
+                          [minFractionDigits]="0"
+                          [maxFractionDigits]="4"
+                          placeholder="Ej. 12"
+                          styleClass="w-full"
+                          inputStyleClass="w-full tabular"
+                        />
+                        @if (err('units.' + i + '.factor'); as e) {
+                          <p class="field-error">{{ e }}</p>
+                        } @else if ((submitted() || g.controls['factor'].touched) && g.controls['factor'].invalid) {
+                          <p class="field-error">Ingresa un factor mayor que 0.</p>
+                        }
+                      </td>
+                      <td class="px-4 py-3 text-sm">
+                        @if (factorHints()[i]; as hint) {
+                          <span class="inline-flex items-center gap-1.5 text-ink-2 tabular">
+                            <span class="material-symbols-outlined !text-[18px] text-brand">swap_horiz</span>
+                            {{ hint }}
+                          </span>
+                        } @else {
+                          <span class="text-ink-3">Cuántas <span class="font-medium">{{ baseUnit()?.code }}</span> contiene una unidad alterna.</span>
+                        }
+                      </td>
+                      <td class="px-4 py-3 text-center">
+                        <p-checkbox
+                          formControlName="is_default_purchase"
+                          [binary]="true"
+                          (onChange)="setDefaultPurchase(i, !!$event.checked)"
+                          [inputId]="'unit_default_' + i"
+                        />
+                      </td>
+                      <td class="px-3 py-2 text-right">
+                        @if (canEdit()) {
+                          <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Quitar" (onClick)="removeUnit(i)" />
+                        }
+                      </td>
+                    </tr>
+                    @for (msg of rowErrors('units', i, ['unit_id', 'factor']); track msg) {
+                      <tr class="border-b border-line">
+                        <td colspan="5" class="px-5 pb-2 -mt-2 field-error">{{ msg }}</td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+            @if (err('units'); as e) {
+              <p class="field-error px-5 py-3 border-t border-line">{{ e }}</p>
+            }
+          }
+        </div>
+      </p-tabpanel>
+
+      <!-- ================= Parámetros por bodega ================= -->
+      <p-tabpanel value="warehouses">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Parámetros por bodega</div>
+              <p class="text-xs text-ink-3 mt-0.5">Si una bodega no tiene parámetros, se usa el stock mínimo por defecto.</p>
+            </div>
+            @if (canEdit()) {
+              <p-button label="Agregar bodega" icon="pi pi-plus" severity="secondary" [outlined]="true" size="small" [disabled]="warehouseArray.length >= warehouses().length" (onClick)="addWarehouse()" />
+            }
+          </div>
+
+          @if (!warehouseArray.length) {
+            <div class="card-body text-sm text-ink-3 text-center py-10">
+              Sin parámetros por bodega. Todas usan el stock mínimo por defecto
+              <span class="font-semibold text-ink tabular">({{ fmt(form.controls.default_min_stock.value) || '0' }} {{ baseUnit()?.code }})</span>.
+            </div>
+          } @else {
+            <div class="overflow-x-auto" formArrayName="warehouse_settings">
+              <table class="w-full">
+                <thead>
+                  <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                    <th class="th-label text-left px-5 py-2.5">Bodega</th>
+                    <th class="th-label text-right px-4 py-2.5 w-52">Stock mínimo</th>
+                    <th class="th-label text-right px-4 py-2.5 w-52">Stock máximo</th>
+                    <th class="w-14"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (g of warehouseArray.controls; track g; let i = $index) {
+                    <tr [formGroupName]="i" class="border-b border-line last:border-b-0 align-top">
+                      <td class="px-5 py-3">
+                        <p-select
+                          formControlName="warehouse_id"
+                          [options]="warehouseOptionsByRow()[i]"
+                          optionLabel="name"
+                          optionValue="id"
+                          placeholder="Selecciona bodega"
+                          appendTo="body"
+                          styleClass="w-full"
+                        >
+                          <ng-template #item let-w>
+                            <span class="tabular text-ink-3 mr-2">{{ w.code }}</span>{{ w.name }}
+                          </ng-template>
+                        </p-select>
+                        @if (err('warehouse_settings.' + i + '.warehouse_id'); as e) {
+                          <p class="field-error">{{ e }}</p>
+                        } @else if ((submitted() || g.controls['warehouse_id'].touched) && g.controls['warehouse_id'].invalid) {
+                          <p class="field-error">Selecciona una bodega.</p>
+                        }
+                      </td>
+                      <td class="px-4 py-3">
+                        <p-inputnumber
+                          formControlName="min_stock"
+                          mode="decimal"
+                          [min]="0"
+                          [minFractionDigits]="0"
+                          [maxFractionDigits]="3"
+                          [suffix]="baseUnit() ? ' ' + baseUnit()!.code : ''"
+                          styleClass="w-full"
+                          inputStyleClass="w-full tabular text-right"
+                        />
+                        @if (err('warehouse_settings.' + i + '.min_stock'); as e) {
+                          <p class="field-error">{{ e }}</p>
+                        } @else if ((submitted() || g.controls['min_stock'].touched) && g.controls['min_stock'].invalid) {
+                          <p class="field-error">Ingresa un mínimo (0 o más).</p>
+                        }
+                      </td>
+                      <td class="px-4 py-3">
+                        <p-inputnumber
+                          formControlName="max_stock"
+                          mode="decimal"
+                          [min]="0"
+                          [minFractionDigits]="0"
+                          [maxFractionDigits]="3"
+                          [suffix]="baseUnit() ? ' ' + baseUnit()!.code : ''"
+                          placeholder="Sin máximo"
+                          styleClass="w-full"
+                          inputStyleClass="w-full tabular text-right"
+                        />
+                        @if (err('warehouse_settings.' + i + '.max_stock'); as e) {
+                          <p class="field-error">{{ e }}</p>
+                        }
+                      </td>
+                      <td class="px-3 py-2 text-right">
+                        @if (canEdit()) {
+                          <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Quitar" (onClick)="removeWarehouse(i)" />
+                        }
+                      </td>
+                    </tr>
+                    @for (msg of rowErrors('warehouse_settings', i, ['warehouse_id', 'min_stock', 'max_stock']); track msg) {
+                      <tr class="border-b border-line">
+                        <td colspan="4" class="px-5 pb-2 field-error">{{ msg }}</td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+            @if (err('warehouse_settings'); as e) {
+              <p class="field-error px-5 py-3 border-t border-line">{{ e }}</p>
+            }
+          }
+        </div>
+      </p-tabpanel>
+    </p-tabpanels>
+  </p-tabs>
+
+  @if (canEdit()) {
+    <div class="flex justify-end gap-2 mt-4">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" [disabled]="saving()" (onClick)="cancel()" />
+      <p-button [label]="isEdit() ? 'Guardar cambios' : 'Crear producto'" icon="pi pi-check" type="submit" [loading]="saving()" [disabled]="loading()" />
+    </div>
+  }
+</form>

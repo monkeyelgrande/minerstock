@@ -1,0 +1,120 @@
+<app-page-header title="Roles y permisos" subtitle="Qué puede ver y hacer cada rol en el sistema" [crumbs]="[{ label: 'Administración' }, { label: 'Roles y permisos' }]" />
+
+<div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-start">
+  <!-- Lista de roles -->
+  <div class="card overflow-hidden">
+    <div class="card-header"><span class="card-title">Roles</span></div>
+    @if (loading()) {
+      <div class="card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</div>
+    } @else {
+      <ul class="p-2 space-y-1">
+        @for (r of roles(); track r.id) {
+          <li>
+            <button
+              type="button"
+              class="w-full text-left rounded-lg border px-3 py-2.5 transition-colors flex items-center justify-between gap-2"
+              [class.border-brand]="r.id === selectedId()"
+              [class.bg-amber-50]="r.id === selectedId()"
+              [class.border-transparent]="r.id !== selectedId()"
+              [class.hover:bg-canvas]="r.id !== selectedId()"
+              (click)="select(r)"
+            >
+              <span class="min-w-0">
+                <span class="block font-medium text-ink truncate">{{ r.label }}</span>
+                <span class="block text-xs text-ink-3">
+                  {{ r.users_count }} {{ r.users_count === 1 ? 'usuario' : 'usuarios' }}
+                  · {{ r.name === 'admin' ? 'todos los permisos' : r.permissions.length + ' permisos' }}
+                </span>
+              </span>
+              @if (r.name === 'admin') {
+                <span class="material-symbols-outlined text-brand !text-[18px]" title="Administrador">shield</span>
+              } @else if (r.id === selectedId() && dirty()) {
+                <span class="w-2 h-2 rounded-full bg-brand shrink-0" title="Cambios sin guardar"></span>
+              }
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </div>
+
+  <!-- Matriz de permisos -->
+  <div class="card overflow-hidden">
+    <div class="card-header">
+      <div class="min-w-0">
+        <div class="card-title">Permisos de {{ selected()?.label ?? '…' }}</div>
+        @if (isAdmin()) {
+          <p class="text-xs text-ink-3 mt-0.5">El administrador siempre tiene todos los permisos.</p>
+        } @else if (selected()) {
+          <p class="text-xs text-ink-3 mt-0.5 tabular">{{ draftCount() }} de {{ totalCount() }} permisos habilitados.</p>
+        }
+      </div>
+      @if (canEdit()) {
+        <div class="flex items-center gap-2 shrink-0">
+          <p-button label="Descartar" severity="secondary" [text]="true" size="small" [disabled]="!dirty() || saving()" (onClick)="discard()" />
+          <p-button label="Guardar permisos" icon="pi pi-check" size="small" [disabled]="!dirty()" [loading]="saving()" (onClick)="save()" />
+        </div>
+      }
+    </div>
+
+    @if (loading()) {
+      <div class="card-body text-sm text-ink-3">Cargando permisos…</div>
+    } @else if (!selected()) {
+      <div class="card-body text-sm text-ink-3">Selecciona un rol.</div>
+    } @else {
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+              <th class="th-label text-left px-5 py-2.5">Recurso</th>
+              @for (a of actions; track a.key) {
+                <th class="th-label text-center px-3 py-2.5 w-24">{{ a.label }}</th>
+              }
+              <th class="th-label text-center px-3 py-2.5 w-24 border-l border-line">Todos</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of resources(); track row.key) {
+              <tr class="border-b border-line last:border-b-0 hover:bg-[#F8FAFC]">
+                <td class="px-5 py-2.5">
+                  <div class="font-medium text-ink">{{ row.label }}</div>
+                  <div class="text-[11px] text-ink-3 tabular">{{ row.key }}</div>
+                </td>
+                @for (a of actions; track a.key) {
+                  <td class="px-3 py-2.5 text-center">
+                    @if (row.perms[a.key]; as perm) {
+                      <p-checkbox
+                        [binary]="true"
+                        [ngModel]="has(perm)"
+                        (ngModelChange)="toggle(perm, $event)"
+                        [disabled]="!canEdit()"
+                        [inputId]="perm"
+                        [pTooltip]="perm"
+                        tooltipPosition="top"
+                      />
+                    } @else {
+                      <span class="text-ink-3 select-none" title="No aplica">—</span>
+                    }
+                  </td>
+                }
+                <td class="px-3 py-2.5 text-center border-l border-line">
+                  <p-checkbox
+                    [binary]="true"
+                    [ngModel]="rowAll(row)"
+                    [indeterminate]="rowSome(row)"
+                    (ngModelChange)="toggleRow(row, $event)"
+                    [disabled]="!canEdit()"
+                    [inputId]="'all_' + row.key"
+                  />
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (!auth.can('roles.update') && !isAdmin()) {
+        <p class="px-5 py-3 border-t border-line text-xs text-ink-3">Solo lectura: no tienes permiso para modificar roles.</p>
+      }
+    }
+  </div>
+</div>

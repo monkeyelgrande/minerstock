@@ -13,8 +13,8 @@
 set -euo pipefail
 
 # ---------- PROJECT CONFIG (override per fork) ----------
-PROJECT_NAME="${PROJECT_NAME:-monkeystechnology}"
-PROJECT_DOMAIN="${PROJECT_DOMAIN:-monkeystechnology.com}"
+PROJECT_NAME="${PROJECT_NAME:-minerstock}"
+PROJECT_DOMAIN="${PROJECT_DOMAIN:-minerstock.monkeyscompany.com}"
 SMOKE_PATHS=("/" "/api/health")
 # --------------------------------------------------------
 

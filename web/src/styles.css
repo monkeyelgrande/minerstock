@@ -1,0 +1,159 @@
+/* Orden de capas: PrimeNG queda debajo de las utilidades de Tailwind para poder sobreescribir. */
+@layer theme, base, primeng, components, utilities;
+
+@import "tailwindcss";
+@plugin "tailwindcss-primeui";
+@import "primeicons/primeicons.css";
+
+/* ---------- Tokens del sistema de diseño MinerStock (ver docs/05-design-system.md) ---------- */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-shell: #0f172a;
+  --color-shell-2: #1e293b;
+  --color-shell-text: #f8fafc;
+  --color-shell-muted: #94a3b8;
+
+  --color-canvas: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-line: #e5e7eb;
+  --color-line-strong: #d1d5db;
+  --color-ink: #1f2937;
+  --color-ink-2: #4b5563;
+  --color-ink-3: #6b7280;
+  --color-placeholder: #9ca3af;
+
+  --color-brand: #f59e0b;
+  --color-brand-hover: #d97706;
+  --color-brand-active: #b45309;
+  --color-link: #2563eb;
+
+  --radius-card: 8px;
+  --spacing-sidebar: 260px;
+  --spacing-topbar: 64px;
+}
+
+/* ---------- Base ---------- */
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background: var(--color-canvas);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+  }
+  .material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+    font-size: 20px;
+    line-height: 1;
+    user-select: none;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---------- Componentes propios ---------- */
+@layer components {
+  .card {
+    @apply bg-surface border border-line rounded-card shadow-[0_1px_2px_0_rgba(15,23,42,0.05)];
+  }
+  .card-header {
+    @apply flex items-center justify-between gap-3 px-5 py-4 border-b border-[#F3F4F6];
+  }
+  .card-title {
+    @apply text-base font-semibold text-ink;
+  }
+  .card-body {
+    @apply p-5;
+  }
+  .page-title {
+    @apply text-2xl font-semibold tracking-tight text-ink;
+  }
+  .page-subtitle {
+    @apply text-sm text-ink-2 mt-0.5;
+  }
+  .th-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.05em] text-[#64748B];
+  }
+  .field-label {
+    @apply block text-[13px] font-medium text-ink mb-1.5;
+  }
+  .field-error {
+    @apply text-xs text-red-600 mt-1;
+  }
+  .field-hint {
+    @apply text-xs text-ink-3 mt-1;
+  }
+  .doc-link {
+    @apply font-medium text-link hover:underline tabular-nums;
+  }
+
+  /* Chips de estado */
+  .chip {
+    @apply inline-flex items-center h-6 px-2 rounded-[6px] text-xs font-semibold border whitespace-nowrap;
+  }
+  .chip-draft   { @apply text-[#475569] bg-[#F1F5F9] border-[#CBD5E1]; }
+  .chip-pending { @apply text-[#1D4ED8] bg-[#EFF6FF] border-[#BFDBFE]; }
+  .chip-success { @apply text-[#065F46] bg-[#ECFDF5] border-[#A7F3D0]; }
+  .chip-partial { @apply text-[#C2410C] bg-[#FFF7ED] border-[#FED7AA]; }
+  .chip-danger  { @apply text-[#B91C1C] bg-[#FEF2F2] border-[#FECACA]; }
+  .chip-info    { @apply text-[#5B21B6] bg-[#F5F3FF] border-[#DDD6FE]; }
+}
+
+/* ---------- Ajustes finos de PrimeNG para el estilo denso ---------- */
+.p-datatable .p-datatable-thead > tr > th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #cbd5e1;
+}
+.p-datatable .p-datatable-tbody > tr > td {
+  padding: 0.65rem 1rem;
+  font-size: 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.p-datatable .p-datatable-tbody > tr:hover {
+  background: #f8fafc;
+}
+.p-datatable .p-datatable-tbody > tr:last-child > td {
+  border-bottom: 0;
+}
+.p-paginator {
+  padding: 0.5rem 1rem;
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+  font-size: 13px;
+}
+.p-drawer {
+  width: 480px !important;
+}
+.p-drawer .p-drawer-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+.p-drawer .p-drawer-content {
+  padding: 0;
+}
+.p-button-label {
+  font-weight: 600;
+}
+.p-inputtext,
+.p-select,
+.p-multiselect,
+.p-inputnumber-input,
+.p-datepicker-input,
+.p-textarea {
+  font-size: 14px;
+}
+.p-toast .p-toast-message {
+  font-size: 14px;
+}

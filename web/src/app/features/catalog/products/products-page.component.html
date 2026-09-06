@@ -1,0 +1,102 @@
+<app-page-header title="Productos" subtitle="Catálogo de insumos, repuestos y materiales" [crumbs]="[{ label: 'Catálogo' }, { label: 'Productos' }]" />
+
+<app-crud-toolbar
+  [(search)]="search"
+  [(active)]="active"
+  searchPlaceholder="Buscar por SKU, nombre o código de barras…"
+  [createLabel]="auth.can('products.create') ? 'Nuevo producto' : null"
+  (create)="goCreate()"
+>
+  <p-select
+    [options]="categories()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Categoría"
+    [showClear]="true"
+    [filter]="categories().length > 8"
+    filterPlaceholder="Buscar categoría…"
+    [ngModel]="categoryId()"
+    (ngModelChange)="setCategory($event)"
+    styleClass="w-52"
+  />
+  <p-select
+    [options]="kindOptions"
+    optionLabel="label"
+    optionValue="value"
+    [ngModel]="kind()"
+    (ngModelChange)="setKind($event)"
+    styleClass="w-44"
+  />
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="name"
+    [sortOrder]="1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="sku" class="w-36">SKU <p-sortIcon field="sku" /></th>
+        <th pSortableColumn="name">Producto <p-sortIcon field="name" /></th>
+        <th class="w-28">Unidad base</th>
+        <th class="w-32">Tipo</th>
+        <th>Unidades alternas</th>
+        <th pSortableColumn="default_min_stock" class="w-32 text-right">Stock mínimo <p-sortIcon field="default_min_stock" /></th>
+        <th class="w-28">Estado</th>
+        <th class="w-28 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="tabular font-semibold text-link hover:underline cursor-pointer" (click)="goEdit(row)">{{ row.sku }}</a>
+        </td>
+        <td>
+          <div class="font-medium text-ink">{{ row.name }}</div>
+          @if (row.category) {
+            <div class="text-xs text-ink-3">{{ row.category.name }}</div>
+          }
+        </td>
+        <td class="tabular text-ink-2">{{ row.base_unit?.code ?? '—' }}</td>
+        <td>
+          @if (row.kind === 'retornable') {
+            <span class="chip chip-info">Retornable</span>
+          } @else {
+            <span class="chip chip-draft">Consumible</span>
+          }
+        </td>
+        <td class="tabular text-ink-2">{{ altUnits(row) }}</td>
+        <td class="tabular text-right">{{ fmt(row.default_min_stock) }} <span class="text-xs text-ink-3">{{ row.base_unit?.code }}</span></td>
+        <td><app-active-chip [active]="row.is_active" /></td>
+        <td class="text-right whitespace-nowrap">
+          @if (auth.can('products.update')) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="goEdit(row)" />
+            <p-button [icon]="row.is_active ? 'pi pi-ban' : 'pi pi-check'" [text]="true" [rounded]="true" severity="secondary" size="small" [pTooltip]="row.is_active ? 'Desactivar' : 'Activar'" (onClick)="toggleActive(row)" />
+          } @else {
+            <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver" (onClick)="goEdit(row)" />
+          }
+          @if (auth.can('products.delete')) {
+            <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Eliminar" (onClick)="confirmDelete(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="8" class="text-center py-10 text-ink-3">No hay productos que coincidan con la búsqueda.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

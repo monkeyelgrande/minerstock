@@ -1,0 +1,136 @@
+<app-page-header title="Receptores" subtitle="Personas y áreas que reciben material del inventario" [crumbs]="[{ label: 'Catálogo' }, { label: 'Receptores' }]" />
+
+<app-crud-toolbar
+  [(search)]="search"
+  [(active)]="active"
+  searchPlaceholder="Buscar por nombre, documento o teléfono…"
+  [createLabel]="auth.can('recipients.create') ? 'Nuevo receptor' : null"
+  (create)="openCreate()"
+>
+  <p-select
+    [options]="typeFilterOptions"
+    optionLabel="label"
+    optionValue="value"
+    [ngModel]="typeFilter()"
+    (ngModelChange)="onTypeFilterChange($event)"
+    styleClass="w-40"
+  />
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="name"
+    [sortOrder]="1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+        <th pSortableColumn="type" class="w-28">Tipo <p-sortIcon field="type" /></th>
+        <th>Centro de costo</th>
+        <th>Sede</th>
+        <th class="w-36">Teléfono</th>
+        <th class="w-28">Estado</th>
+        <th class="w-28 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <div class="font-medium text-ink">{{ row.name }}</div>
+          @if (row.document_number) {
+            <div class="text-xs text-ink-3 tabular">{{ row.document_number }}</div>
+          }
+        </td>
+        <td>
+          <span class="chip" [class.chip-info]="row.type === 'persona'" [class.chip-draft]="row.type === 'area'">
+            {{ typeLabel(row.type) }}
+          </span>
+        </td>
+        <td class="text-ink-2">
+          @if (row.cost_center) {
+            <span class="tabular font-medium text-ink">{{ row.cost_center.code }}</span> – {{ row.cost_center.name }}
+          } @else {
+            —
+          }
+        </td>
+        <td class="text-ink-2">{{ row.site?.name || '—' }}</td>
+        <td class="tabular">{{ row.phone || '—' }}</td>
+        <td><app-active-chip [active]="row.is_active" /></td>
+        <td class="text-right whitespace-nowrap">
+          @if (auth.can('recipients.update')) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="openEdit(row)" />
+            <p-button [icon]="row.is_active ? 'pi pi-ban' : 'pi pi-check'" [text]="true" [rounded]="true" severity="secondary" size="small" [pTooltip]="row.is_active ? 'Desactivar' : 'Activar'" (onClick)="toggleActive(row)" />
+          }
+          @if (auth.can('recipients.delete')) {
+            <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Eliminar" (onClick)="confirmDelete(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="7" class="text-center py-10 text-ink-3">No hay receptores que coincidan con la búsqueda.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<app-form-drawer
+  [(visible)]="drawerOpen"
+  [title]="editing() ? 'Editar receptor' : 'Nuevo receptor'"
+  [subtitle]="editing()?.name"
+  [saving]="saving()"
+  (save)="save()"
+>
+  <ng-container [formGroup]="form">
+    <div class="grid grid-cols-3 gap-3">
+      <app-field label="Tipo" [required]="true" [control]="form.controls['type']" [serverError]="err('type')" [submitted]="submitted()">
+        <p-select formControlName="type" [options]="recipientTypes" optionLabel="label" optionValue="value" styleClass="w-full" />
+      </app-field>
+      <div class="col-span-2">
+        <app-field label="Nombre" [required]="true" [control]="form.controls['name']" [serverError]="err('name')" [submitted]="submitted()">
+          <input pInputText formControlName="name" class="w-full" placeholder="Nombre de la persona o área" />
+        </app-field>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <app-field label="Documento" [serverError]="err('document_number')">
+        <input pInputText formControlName="document_number" class="w-full" />
+      </app-field>
+      <app-field label="Teléfono" [serverError]="err('phone')">
+        <input pInputText formControlName="phone" class="w-full" />
+      </app-field>
+    </div>
+    <app-field label="Centro de costo" [control]="form.controls['cost_center_id']" [serverError]="err('cost_center_id')" [submitted]="submitted()">
+      <p-select
+        formControlName="cost_center_id"
+        [options]="costCenterOptions()"
+        optionLabel="label"
+        optionValue="value"
+        [showClear]="true"
+        [filter]="costCenterOptions().length > 8"
+        placeholder="Sin centro de costo"
+        styleClass="w-full"
+      />
+    </app-field>
+    <app-field label="Sede" [control]="form.controls['site_id']" [serverError]="err('site_id')" [submitted]="submitted()">
+      <p-select formControlName="site_id" [options]="sites()" optionLabel="name" optionValue="id" [showClear]="true" [filter]="sites().length > 8" placeholder="Sin sede" styleClass="w-full" />
+    </app-field>
+    <div class="flex items-center gap-3 pt-1">
+      <p-toggleswitch formControlName="is_active" inputId="rcp_active" />
+      <label for="rcp_active" class="text-sm">Receptor activo</label>
+    </div>
+  </ng-container>
+</app-form-drawer>

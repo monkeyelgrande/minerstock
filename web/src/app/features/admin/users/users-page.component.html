@@ -1,0 +1,262 @@
+<app-page-header title="Usuarios" subtitle="Cuentas de acceso, roles y bodegas asignadas" [crumbs]="[{ label: 'Administración' }, { label: 'Usuarios' }]" />
+
+<app-crud-toolbar
+  [(search)]="search"
+  [(active)]="active"
+  searchPlaceholder="Buscar por nombre, usuario o correo…"
+  [createLabel]="auth.can('users.create') ? 'Nuevo usuario' : null"
+  (create)="openCreate()"
+>
+  <p-select
+    [options]="roleOptions"
+    optionLabel="label"
+    optionValue="value"
+    placeholder="Rol"
+    [showClear]="true"
+    [ngModel]="roleFilter()"
+    (ngModelChange)="setRoleFilter($event)"
+    styleClass="w-44"
+  />
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="name"
+    [sortOrder]="1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="name">Usuario <p-sortIcon field="name" /></th>
+        <th>Roles</th>
+        <th>Bodegas asignadas</th>
+        <th pSortableColumn="last_login_at" class="w-44">Último acceso <p-sortIcon field="last_login_at" /></th>
+        <th class="w-28">Estado</th>
+        <th class="w-36 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <div class="flex items-center gap-3">
+            <span class="w-9 h-9 rounded-full bg-brand text-ink text-xs font-bold flex items-center justify-center shrink-0 select-none">{{ initials(row.name) }}</span>
+            <div class="min-w-0">
+              <div class="font-medium text-ink truncate">
+                {{ row.name }}
+                @if (isSelf(row)) {
+                  <span class="text-xs text-ink-3 font-normal">(tú)</span>
+                }
+              </div>
+              <div class="text-xs text-ink-3 truncate">
+                @if (row.username) {
+                  <span class="tabular">&#64;{{ row.username }}</span> ·
+                }
+                {{ row.email }}
+              </div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div class="flex flex-wrap gap-1">
+            @for (r of row.roles; track r) {
+              <span class="chip chip-info">{{ roleLabel(r) }}</span>
+            }
+          </div>
+        </td>
+        <td>
+          @if (row.sees_all_warehouses) {
+            <span class="chip chip-success">Todas</span>
+          } @else if (row.warehouses?.length) {
+            <div class="flex flex-wrap gap-1">
+              @for (w of row.warehouses; track w.id) {
+                <span class="chip chip-draft tabular" [pTooltip]="w.name" [class.!border-brand]="w.id === row.default_warehouse_id">{{ w.code }}</span>
+              }
+            </div>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td class="tabular text-ink-2 whitespace-nowrap">
+          @if (row.last_login_at) {
+            {{ row.last_login_at | date: 'dd/MM/yyyy HH:mm' }}
+          } @else {
+            <span class="text-ink-3">Nunca</span>
+          }
+        </td>
+        <td><app-active-chip [active]="row.is_active" /></td>
+        <td class="text-right whitespace-nowrap">
+          @if (auth.can('users.update')) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="openEdit(row)" />
+            <p-button icon="pi pi-key" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Restablecer contraseña" (onClick)="openResetPassword(row)" />
+            @if (!isSelf(row)) {
+              <p-button [icon]="row.is_active ? 'pi pi-ban' : 'pi pi-check'" [text]="true" [rounded]="true" severity="secondary" size="small" [pTooltip]="row.is_active ? 'Desactivar' : 'Activar'" (onClick)="toggleActive(row)" />
+            }
+          }
+          @if (auth.can('users.delete') && !isSelf(row)) {
+            <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Eliminar" (onClick)="confirmDelete(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="6" class="text-center py-10 text-ink-3">No hay usuarios que coincidan con la búsqueda.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<app-form-drawer
+  [(visible)]="drawerOpen"
+  [title]="editing() ? 'Editar usuario' : 'Nuevo usuario'"
+  [subtitle]="editing()?.email"
+  [saving]="saving()"
+  (save)="save()"
+>
+  <ng-container [formGroup]="form">
+    <div class="grid grid-cols-5 gap-3">
+      <div class="col-span-3">
+        <app-field label="Nombre" [required]="true" [control]="form.controls['name']" [serverError]="err('name')" [submitted]="submitted()">
+          <input pInputText formControlName="name" class="w-full" autocomplete="off" />
+        </app-field>
+      </div>
+      <div class="col-span-2">
+        <app-field label="Usuario" hint="Para iniciar sesión (opcional). Letras, números, guion y guion bajo." [control]="form.controls['username']" [serverError]="err('username')" [submitted]="submitted()">
+          <input pInputText formControlName="username" class="w-full tabular" autocomplete="off" placeholder="jperez" />
+        </app-field>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <app-field label="Correo" [required]="true" [control]="form.controls['email']" [serverError]="err('email')" [submitted]="submitted()">
+        <input pInputText formControlName="email" type="email" class="w-full" autocomplete="off" />
+      </app-field>
+      <app-field label="Teléfono" [serverError]="err('phone')">
+        <input pInputText formControlName="phone" class="w-full" />
+      </app-field>
+    </div>
+
+    @if (!editing()) {
+      <app-field label="Contraseña" [required]="true" hint="Mínimo 8 caracteres." [control]="form.controls['password']" [serverError]="err('password')" [submitted]="submitted()">
+        <p-password
+          formControlName="password"
+          [toggleMask]="true"
+          [feedback]="true"
+          autocomplete="new-password"
+          promptLabel="Ingresa una contraseña"
+          weakLabel="Débil"
+          mediumLabel="Media"
+          strongLabel="Fuerte"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </app-field>
+    } @else {
+      <app-field label="Contraseña" hint="Usa 'Restablecer contraseña' (icono de llave en el listado) para cambiarla.">
+        <input pInputText value="••••••••" class="w-full" disabled />
+      </app-field>
+    }
+
+    <app-field label="Roles" [required]="true" hint="Un usuario puede tener varios roles." [control]="form.controls['roles']" [serverError]="err('roles')" [submitted]="submitted()">
+      <p-multiselect
+        formControlName="roles"
+        [options]="roleOptions"
+        optionLabel="label"
+        optionValue="value"
+        display="chip"
+        placeholder="Selecciona roles"
+        [showToggleAll]="false"
+        [filter]="false"
+        appendTo="body"
+        styleClass="w-full"
+      />
+    </app-field>
+
+    <app-field label="Bodegas asignadas" hint="Administrador y Consulta ven todas las bodegas sin importar esta lista." [serverError]="err('warehouse_ids')">
+      <p-multiselect
+        formControlName="warehouse_ids"
+        [options]="warehouses()"
+        optionLabel="name"
+        optionValue="id"
+        display="chip"
+        placeholder="Sin bodegas asignadas"
+        [filter]="warehouses().length > 8"
+        filterPlaceholder="Buscar bodega…"
+        appendTo="body"
+        styleClass="w-full"
+      >
+        <ng-template #item let-w>
+          <span class="tabular text-ink-3 mr-2">{{ w.code }}</span>{{ w.name }}
+        </ng-template>
+      </p-multiselect>
+    </app-field>
+
+    <app-field label="Bodega por defecto" hint="Se abre al iniciar sesión. Se elige entre las bodegas asignadas (o cualquiera si no hay asignadas)." [serverError]="err('default_warehouse_id')">
+      <p-select
+        formControlName="default_warehouse_id"
+        [options]="defaultWarehouseOptions()"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Sin bodega por defecto"
+        [showClear]="true"
+        appendTo="body"
+        styleClass="w-full"
+      />
+    </app-field>
+
+    <div class="flex items-center gap-3 pt-1">
+      <p-toggleswitch formControlName="is_active" inputId="usr_active" />
+      <label for="usr_active" class="text-sm">Usuario activo</label>
+    </div>
+  </ng-container>
+</app-form-drawer>
+
+<p-dialog
+  [visible]="pwDialogOpen()"
+  (visibleChange)="pwDialogOpen.set($event)"
+  header="Restablecer contraseña"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!pwSaving()"
+  [closable]="!pwSaving()"
+  [style]="{ width: '420px' }"
+>
+  <form [formGroup]="pwForm" (ngSubmit)="resetPassword()" novalidate class="space-y-4">
+    <p class="text-sm text-ink-2">
+      Se asignará una nueva contraseña a <span class="font-semibold text-ink">{{ pwUser()?.name }}</span>
+      <span class="text-ink-3">({{ pwUser()?.email }})</span>. El usuario deberá usarla en su próximo inicio de sesión.
+    </p>
+    <app-field label="Nueva contraseña" [required]="true" hint="Mínimo 8 caracteres." [control]="pwForm.controls.password" [serverError]="pwErrors()['password']" [submitted]="pwSubmitted()">
+      <p-password
+        formControlName="password"
+        [toggleMask]="true"
+        autocomplete="new-password"
+        promptLabel="Ingresa una contraseña"
+        weakLabel="Débil"
+        mediumLabel="Media"
+        strongLabel="Fuerte"
+        appendTo="body"
+        styleClass="w-full"
+        inputStyleClass="w-full"
+      />
+    </app-field>
+    <app-field label="Confirmar contraseña" [required]="true" [control]="pwForm.controls.password_confirmation" [serverError]="pwSubmitted() && pwMismatch() ? 'Las contraseñas no coinciden.' : undefined" [submitted]="pwSubmitted()">
+      <p-password formControlName="password_confirmation" [feedback]="false" [toggleMask]="true" autocomplete="new-password" styleClass="w-full" inputStyleClass="w-full" />
+    </app-field>
+    <div class="flex justify-end gap-2 pt-2">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" [disabled]="pwSaving()" (onClick)="pwDialogOpen.set(false)" />
+      <p-button label="Restablecer" icon="pi pi-key" type="submit" [loading]="pwSaving()" />
+    </div>
+  </form>
+</p-dialog>

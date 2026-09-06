@@ -1,0 +1,108 @@
+<app-page-header title="Bodegas" subtitle="Almacenes físicos donde se guarda el inventario" [crumbs]="[{ label: 'Catálogo' }, { label: 'Bodegas' }]" />
+
+<app-crud-toolbar
+  [(search)]="search"
+  [(active)]="active"
+  searchPlaceholder="Buscar por código o nombre…"
+  [createLabel]="auth.can('warehouses.create') ? 'Nueva bodega' : null"
+  (create)="openCreate()"
+>
+  <p-select
+    [options]="sites()"
+    optionLabel="name"
+    optionValue="id"
+    [ngModel]="siteFilter()"
+    (ngModelChange)="onSiteFilterChange($event)"
+    [showClear]="true"
+    placeholder="Todas las sedes"
+    styleClass="w-52"
+  />
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="name"
+    [sortOrder]="1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="code" class="w-36">Código <p-sortIcon field="code" /></th>
+        <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+        <th>Sede</th>
+        <th class="w-28">Estado</th>
+        <th class="w-28 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td class="tabular font-medium text-ink">{{ row.code }}</td>
+        <td>{{ row.name }}</td>
+        <td>
+          <div class="flex items-center gap-2">
+            <span>{{ row.site?.name || '—' }}</span>
+            @if (row.site?.type) {
+              <span class="chip !text-[10px] !py-0" [class.chip-info]="row.site.type === 'municipio'" [class.chip-partial]="row.site.type === 'mina'">
+                {{ siteTypeLabel(row.site.type) }}
+              </span>
+            }
+          </div>
+        </td>
+        <td><app-active-chip [active]="row.is_active" /></td>
+        <td class="text-right whitespace-nowrap">
+          @if (auth.can('warehouses.update')) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="openEdit(row)" />
+            <p-button [icon]="row.is_active ? 'pi pi-ban' : 'pi pi-check'" [text]="true" [rounded]="true" severity="secondary" size="small" [pTooltip]="row.is_active ? 'Desactivar' : 'Activar'" (onClick)="toggleActive(row)" />
+          }
+          @if (auth.can('warehouses.delete')) {
+            <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Eliminar" (onClick)="confirmDelete(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="5" class="text-center py-10 text-ink-3">No hay bodegas que coincidan con la búsqueda.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<app-form-drawer
+  [(visible)]="drawerOpen"
+  [title]="editing() ? 'Editar bodega' : 'Nueva bodega'"
+  [subtitle]="editing()?.name"
+  [saving]="saving()"
+  (save)="save()"
+>
+  <ng-container [formGroup]="form">
+    <app-field label="Sede" [required]="true" [control]="form.controls['site_id']" [serverError]="err('site_id')" [submitted]="submitted()">
+      <p-select formControlName="site_id" [options]="sites()" optionLabel="name" optionValue="id" placeholder="Selecciona una sede" [filter]="sites().length > 8" styleClass="w-full" />
+    </app-field>
+    <div class="grid grid-cols-3 gap-3">
+      <app-field label="Código" [required]="true" [control]="form.controls['code']" [serverError]="err('code')" [submitted]="submitted()">
+        <input pInputText formControlName="code" class="w-full uppercase" maxlength="20" placeholder="BOD-01" />
+      </app-field>
+      <div class="col-span-2">
+        <app-field label="Nombre" [required]="true" [control]="form.controls['name']" [serverError]="err('name')" [submitted]="submitted()">
+          <input pInputText formControlName="name" class="w-full" placeholder="Bodega principal" />
+        </app-field>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 pt-1">
+      <p-toggleswitch formControlName="is_active" inputId="wh_active" />
+      <label for="wh_active" class="text-sm">Bodega activa</label>
+    </div>
+  </ng-container>
+</app-form-drawer>

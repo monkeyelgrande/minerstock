@@ -1,0 +1,99 @@
+<app-page-header title="Sedes" subtitle="Municipios y minas donde opera la empresa" [crumbs]="[{ label: 'Catálogo' }, { label: 'Sedes' }]" />
+
+<app-crud-toolbar
+  [(search)]="search"
+  [(active)]="active"
+  searchPlaceholder="Buscar por nombre o dirección…"
+  [createLabel]="auth.can('sites.create') ? 'Nueva sede' : null"
+  (create)="openCreate()"
+>
+  <p-select
+    [options]="typeFilterOptions"
+    optionLabel="label"
+    optionValue="value"
+    [ngModel]="typeFilter()"
+    (ngModelChange)="onTypeFilterChange($event)"
+    styleClass="w-40"
+  />
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="name"
+    [sortOrder]="1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+        <th pSortableColumn="type" class="w-32">Tipo <p-sortIcon field="type" /></th>
+        <th>Dirección</th>
+        <th class="w-28 text-right">Bodegas</th>
+        <th class="w-28">Estado</th>
+        <th class="w-28 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td class="font-medium text-ink">{{ row.name }}</td>
+        <td>
+          <span class="chip" [class.chip-info]="row.type === 'municipio'" [class.chip-partial]="row.type === 'mina'">
+            {{ typeLabel(row.type) }}
+          </span>
+        </td>
+        <td class="text-ink-2">{{ row.address || '—' }}</td>
+        <td class="tabular text-right">{{ row.warehouses_count ?? 0 }}</td>
+        <td><app-active-chip [active]="row.is_active" /></td>
+        <td class="text-right whitespace-nowrap">
+          @if (auth.can('sites.update')) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="openEdit(row)" />
+            <p-button [icon]="row.is_active ? 'pi pi-ban' : 'pi pi-check'" [text]="true" [rounded]="true" severity="secondary" size="small" [pTooltip]="row.is_active ? 'Desactivar' : 'Activar'" (onClick)="toggleActive(row)" />
+          }
+          @if (auth.can('sites.delete')) {
+            <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Eliminar" (onClick)="confirmDelete(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="6" class="text-center py-10 text-ink-3">No hay sedes que coincidan con la búsqueda.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<app-form-drawer
+  [(visible)]="drawerOpen"
+  [title]="editing() ? 'Editar sede' : 'Nueva sede'"
+  [subtitle]="editing()?.name"
+  [saving]="saving()"
+  (save)="save()"
+>
+  <ng-container [formGroup]="form">
+    <app-field label="Nombre" [required]="true" [control]="form.controls['name']" [serverError]="err('name')" [submitted]="submitted()">
+      <input pInputText formControlName="name" class="w-full" placeholder="Ej. Mina El Roble" />
+    </app-field>
+    <app-field label="Tipo" [required]="true" [control]="form.controls['type']" [serverError]="err('type')" [submitted]="submitted()">
+      <p-select formControlName="type" [options]="siteTypes" optionLabel="label" optionValue="value" styleClass="w-full" />
+    </app-field>
+    <app-field label="Dirección" [serverError]="err('address')">
+      <input pInputText formControlName="address" class="w-full" />
+    </app-field>
+    <div class="flex items-center gap-3 pt-1">
+      <p-toggleswitch formControlName="is_active" inputId="site_active" />
+      <label for="site_active" class="text-sm">Sede activa</label>
+    </div>
+  </ng-container>
+</app-form-drawer>
