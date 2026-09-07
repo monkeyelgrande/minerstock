@@ -99,6 +99,10 @@ Todas las rutas van bajo `/api`. Salvo `health` y `auth/login`, requieren `Autho
 | CRUD + acciones | `/inventory/supplier-returns` (`/confirm`, `/cancel`, `/reasons`) | devoluciones a proveedor |
 | CRUD + acciones | `/inventory/adjustments` (`/confirm`, `/cancel`, `/reasons`) | ajustes de inventario |
 | CRUD + acciones | `/inventory/stock-counts` (`/products`, `/record`, `/close`, `/cancel`) | conteos físicos que generan ajustes |
+| CRUD + acciones | `/payables/invoices` (`/cancel`, `/counts`, `/invoiceable-receipts`) | facturas de proveedor (IVA + retención, ligadas a recepciones) |
+| POST + acciones | `/payables/payments` (`/cancel`, `/methods`) | pagos aplicados a facturas |
+| CRUD + acciones | `/payables/credit-notes` (`/apply`, `/applications/{id}`, `/cancel`) | notas crédito (automáticas por devolución o manuales) |
+| GET | `/payables/statement`, `/payables/statement/{supplierId}` | estado de cuenta por proveedor |
 
 Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.create`, …) y se verifican con el middleware `permission:`.
 
@@ -109,7 +113,7 @@ Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.cre
 | 0 | Base: login, roles, layout, maestros, usuarios, configuración | ✅ |
 | 1 | Compras: solicitudes con aprobación, cotizaciones, comparativa, OC con PDF | ✅ |
 | 2 | Inventario: recepciones parciales, kardex con costo promedio, stock valorizado, devoluciones, ajustes, conteos | ✅ |
-| 3 | Cuentas por pagar | pendiente |
+| 3 | Cuentas por pagar: facturas con retención, pagos, notas crédito, estado de cuenta | ✅ |
 | 4 | Logística: planillas, recepción en mina, novedades | pendiente |
 | 5 | Consumo en mina: vales, préstamos | pendiente |
 | 6 | Dashboards, reportes, notificaciones | pendiente |

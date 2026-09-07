@@ -17,6 +17,7 @@ interface DashboardData {
   recent_orders?: { id: number; number: string; supplier: string; date: string; total: number; status: string; status_label: string; received_pct: number }[];
   quotations?: { expiring: number; received: number };
   approvals_pending?: { purchase_requests: number; purchase_orders: number };
+  payables?: { open_count: number; open_balance: number; overdue_count: number; overdue_balance: number; due_soon_balance: number; available_credit: number };
   stock?: { total_value: number; products_with_stock: number; below_min: number; in_transit_value: number; on_loan_count: number; receipts_draft: number; counts_open: number };
 }
 
@@ -103,6 +104,18 @@ export class DashboardComponent {
         tone: 'bg-orange-50 text-orange-700',
         note: `${d.quotations.received} recibidas listas para comparar`,
         route: '/compras/comparativa',
+      });
+    }
+    if (d?.payables) {
+      list.push({
+        label: 'Cartera con proveedores',
+        value: new CurrencyPipe('es-CO').transform(d.payables.open_balance, 'COP', 'symbol-narrow', '1.0-0') ?? '$0',
+        icon: 'account_balance_wallet',
+        tone: d.payables.overdue_count > 0 ? 'bg-red-50 text-red-700' : 'bg-indigo-50 text-indigo-700',
+        note: d.payables.overdue_count > 0
+          ? `${d.payables.overdue_count} ${d.payables.overdue_count === 1 ? 'factura vencida' : 'facturas vencidas'} · ${new CurrencyPipe('es-CO').transform(d.payables.overdue_balance, 'COP', 'symbol-narrow', '1.0-0')}`
+          : `${d.payables.open_count} ${d.payables.open_count === 1 ? 'factura abierta' : 'facturas abiertas'}`,
+        route: '/pagos/estado-cuenta',
       });
     }
     if (d?.stock) {

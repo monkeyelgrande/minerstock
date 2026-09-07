@@ -1,0 +1,102 @@
+<app-page-header
+  title="Estado de cuenta"
+  subtitle="Saldos con proveedores"
+  [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Estado de cuenta' }]"
+/>
+
+<!-- ================= KPIs ================= -->
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
+  <div class="card card-body">
+    <div class="th-label">Cartera total</div>
+    <div class="text-2xl font-bold text-ink tabular mt-1">{{ totalBalance() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+    <div class="text-xs text-ink-3 mt-0.5">Saldo pendiente con proveedores</div>
+  </div>
+  <div class="card card-body">
+    <div class="th-label">Vencido</div>
+    <div class="text-2xl font-bold tabular mt-1" [class.text-[#B91C1C]]="totalOverdue() > 0" [class.text-ink]="totalOverdue() <= 0">
+      {{ totalOverdue() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+    </div>
+    <div class="text-xs text-ink-3 mt-0.5">Facturas con vencimiento cumplido</div>
+  </div>
+  <div class="card card-body">
+    <div class="th-label">Proveedores con saldo</div>
+    <div class="text-2xl font-bold text-ink tabular mt-1">{{ suppliersWithBalance() }}</div>
+    <div class="text-xs text-ink-3 mt-0.5">De {{ rows().length }} con movimientos</div>
+  </div>
+  <div class="card card-body">
+    <div class="th-label">Notas crédito disponibles</div>
+    <div class="text-2xl font-bold text-[#065F46] tabular mt-1">{{ totalCredit() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+    <div class="text-xs text-ink-3 mt-0.5">Saldo a favor por aplicar</div>
+  </div>
+</div>
+
+<!-- ================= Buscador ================= -->
+<div class="card px-4 py-3 mb-4 flex flex-wrap items-center gap-3">
+  <div class="relative flex-1 min-w-[220px] max-w-md">
+    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none !text-[18px]">search</span>
+    <input
+      pInputText
+      type="text"
+      class="w-full !pl-9"
+      placeholder="Buscar por nombre o NIT…"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+    />
+  </div>
+  <span class="text-xs text-ink-3 tabular">{{ filtered().length }} proveedor(es)</span>
+</div>
+
+<!-- ================= Tabla resumen ================= -->
+<div class="card overflow-hidden">
+  <p-table [value]="filtered()" [loading]="loading()" dataKey="supplier.id">
+    <ng-template #header>
+      <tr>
+        <th>Proveedor</th>
+        <th class="w-40">Condición</th>
+        <th class="w-28 text-right">Facturas</th>
+        <th class="w-40 text-right">Total facturado</th>
+        <th class="w-40 text-right">Saldo</th>
+        <th class="w-40 text-right">Vencido</th>
+        <th class="w-40 text-right">Crédito disponible</th>
+        <th class="w-32 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr class="cursor-pointer hover:bg-canvas transition-colors" (click)="goDetail(row)">
+        <td>
+          <div class="text-ink font-medium">{{ row.supplier.name }}</div>
+          <div class="text-xs text-ink-3 tabular">NIT {{ row.supplier.document_number }}</div>
+        </td>
+        <td class="text-ink-2 text-sm">{{ terms(row) }}</td>
+        <td class="tabular text-right text-ink-2">{{ row.open_count }} de {{ row.invoices_count }}</td>
+        <td class="tabular text-right text-ink-2">{{ row.total_invoiced | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td class="tabular text-right font-semibold text-ink">{{ row.balance | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td class="tabular text-right" [class.text-[#B91C1C]]="row.overdue_balance > 0" [class.font-semibold]="row.overdue_balance > 0" [class.text-ink-3]="row.overdue_balance <= 0">
+          {{ row.overdue_balance | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+        </td>
+        <td class="tabular text-right" [class.text-[#065F46]]="row.available_credit > 0" [class.text-ink-3]="row.available_credit <= 0">
+          {{ row.available_credit | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+        </td>
+        <td class="text-right whitespace-nowrap">
+          <p-button label="Ver estado" icon="pi pi-arrow-right" iconPos="right" [text]="true" size="small" (onClick)="goDetail(row)" />
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="8" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">account_balance_wallet</span>
+            <span class="text-sm">
+              @if (search()) {
+                Ningún proveedor coincide con la búsqueda.
+              } @else {
+                Aún no hay facturas de proveedores registradas.
+              }
+            </span>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

@@ -34,6 +34,9 @@
     @if (showReceive()) {
       <p-button label="Registrar recepción" icon="pi pi-inbox" [disabled]="!!acting()" (onClick)="goReceive()" />
     }
+    @if (showInvoice()) {
+      <p-button label="Registrar factura" icon="pi pi-receipt" severity="secondary" [outlined]="true" [disabled]="!!acting()" (onClick)="goInvoice()" />
+    }
   </app-page-header>
 
   <!-- ================= Banda de estado ================= -->
@@ -232,11 +235,42 @@
           }
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">Facturas</span></div>
-          <div class="card-body text-sm text-ink-3 flex items-center gap-2">
-            <span class="material-symbols-outlined !text-[20px]">receipt</span>
-            Disponible en cuentas por pagar.
+          <div class="card-header">
+            <span class="card-title">Facturas</span>
+            @if (invoices().length) {
+              <span class="text-xs text-ink-3">{{ invoices().length }} {{ invoices().length === 1 ? 'factura' : 'facturas' }}</span>
+            }
           </div>
+          @if (invoices().length) {
+            <ul class="divide-y divide-line">
+              @for (f of invoices(); track f.id) {
+                <li class="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+                  <div class="min-w-0">
+                    <a class="doc-link" [routerLink]="['/pagos/facturas', f.id]">{{ f.number }}</a>
+                    <div class="text-xs text-ink-3 tabular truncate">
+                      N° {{ f.supplier_invoice_number }} · Vence {{ f.due_date | date: 'dd/MM/yyyy' }}
+                    </div>
+                  </div>
+                  <div class="text-right tabular shrink-0">
+                    <div class="text-ink font-medium">{{ f.total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+                    <div class="text-xs text-ink-3">Saldo {{ f.balance | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+                  </div>
+                  <app-chip [tone]="payableTone(f.status)" [label]="f.status_label" />
+                </li>
+              }
+            </ul>
+          } @else {
+            <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+              <span class="material-symbols-outlined !text-[20px]">receipt</span>
+              @if (!canViewInvoices()) {
+                <span>Disponible en cuentas por pagar.</span>
+              } @else if (showInvoice()) {
+                <span>Aún no se ha registrado ninguna factura para esta orden.</span>
+              } @else {
+                <span>Las facturas se registran una vez emitida la orden.</span>
+              }
+            </div>
+          }
         </div>
       </div>
     </div>

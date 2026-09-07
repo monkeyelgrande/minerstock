@@ -1,0 +1,244 @@
+<app-page-header
+  [title]="title()"
+  [subtitle]="isEdit() ? (invoice()?.supplier?.name ?? '') : 'Registra una factura de proveedor a partir de recepciones confirmadas o como compra menor'"
+  [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Facturas de proveedor', route: '/pagos/facturas' }, { label: isEdit() ? (invoice()?.number ?? '…') : 'Nueva' }]"
+>
+  @if (isEdit() && invoice(); as inv) {
+    <app-chip chip [tone]="payableTone(inv.status)" [label]="inv.status_label" />
+  }
+  <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancel()" />
+  <p-button label="Guardar" icon="pi pi-save" [loading]="saving()" [disabled]="loading()" (onClick)="save()" />
+</app-page-header>
+
+@if (formError(); as e) {
+  <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+    <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">error</span>
+    <div>
+      <div class="font-semibold text-[#B91C1C]">No se pudo guardar</div>
+      <div class="text-ink-2 mt-0.5">{{ e }}</div>
+    </div>
+  </div>
+}
+
+<form [formGroup]="form" (ngSubmit)="save()" novalidate class="space-y-4">
+  <!-- ================= Origen ================= -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Origen</span>
+      @if (loading() || receiptsLoading()) {
+        <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</span>
+      }
+    </div>
+    <div class="card-body space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <app-field
+          label="Proveedor"
+          [required]="true"
+          [control]="form.controls.supplier_id"
+          [serverError]="err('supplier_id')"
+          [submitted]="submitted()"
+          [hint]="form.controls.supplier_id.disabled ? 'El proveedor se toma de las recepciones seleccionadas.' : undefined"
+        >
+          <p-select
+            formControlName="supplier_id"
+            [options]="suppliers()"
+            optionLabel="name"
+            optionValue="id"
+            placeholder="Selecciona un proveedor"
+            [filter]="true"
+            filterBy="name,document_number"
+            filterPlaceholder="Buscar por nombre o NIT…"
+            [showClear]="form.controls.supplier_id.enabled"
+            appendTo="body"
+            styleClass="w-full"
+            (onChange)="onSupplierChange()"
+          >
+            <ng-template #item let-s>
+              <div class="flex flex-col leading-tight">
+                <span class="text-sm font-medium">{{ s.name }}</span>
+                <span class="text-xs text-ink-3 tabular">NIT {{ s.document_number }}</span>
+              </div>
+            </ng-template>
+          </p-select>
+        </app-field>
+        <div class="flex items-end">
+          <div class="rounded-lg border border-dashed border-line-strong px-4 py-3 text-sm text-ink-3 flex items-center gap-2 w-full">
+            <span class="material-symbols-outlined !text-[20px]">info</span>
+            También puedes registrar una factura sin recepciones (compra menor); en ese caso el proveedor sigue siendo obligatorio.
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span class="field-label !mb-0">Recepciones a facturar</span>
+          @if (checkedCount()) {
+            <span class="text-xs text-ink-3 tabular">{{ checkedCount() }} recepción(es) seleccionada(s)</span>
+          }
+        </div>
+
+        @if (receiptsLoading()) {
+          <div class="rounded-lg border border-line px-4 py-6 text-center text-sm text-ink-3">
+            <i class="pi pi-spin pi-spinner mr-1"></i>Cargando recepciones facturables…
+          </div>
+        } @else if (!visibleReceipts().length) {
+          <div class="rounded-lg border border-dashed border-line-strong px-4 py-6 text-center text-sm text-ink-3">
+            @if (form.getRawValue().supplier_id) {
+              No hay recepciones confirmadas pendientes de factura para este proveedor.
+            } @else {
+              No hay recepciones confirmadas pendientes de factura. Selecciona el proveedor para registrar una compra menor.
+            }
+          </div>
+        } @else {
+          <ul class="rounded-lg border border-line divide-y divide-line overflow-hidden">
+            @for (r of visibleReceipts(); track r.id) {
+              <li
+                class="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                [class.bg-amber-50/60]="isChecked(r)"
+                [class.opacity-50]="isRowDisabled(r)"
+                [pTooltip]="isRowDisabled(r) ? 'Solo recepciones de la misma orden' : undefined"
+                tooltipPosition="top"
+              >
+                <p-checkbox
+                  [binary]="true"
+                  [ngModel]="isChecked(r)"
+                  [ngModelOptions]="{ standalone: true }"
+                  [disabled]="isRowDisabled(r)"
+                  [inputId]="'rc_' + r.id"
+                  (onChange)="toggleReceipt(r, $event.checked)"
+                />
+                <label [for]="'rc_' + r.id" class="flex-1 min-w-0 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-0.5 cursor-pointer">
+                  <span class="font-medium text-ink tabular">{{ r.number }}</span>
+                  <span class="text-ink-2">
+                    @if (r.order) { OC <span class="tabular">{{ r.order.number }}</span> } @else { — }
+                  </span>
+                  <span class="text-ink-2 tabular">{{ r.received_at ? (r.received_at | date: 'dd/MM/yyyy') : '—' }}</span>
+                  <span class="text-ink-3 truncate">
+                    @if (r.supplier_remission) { Remisión {{ r.supplier_remission }} } @else { Sin remisión }
+                    @if (r.items_count !== null) { · {{ r.items_count }} ítem(s) }
+                  </span>
+                </label>
+                <div class="text-right tabular shrink-0">
+                  @if (r.subtotal !== null) {
+                    <div class="text-ink font-medium">{{ r.subtotal | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+                    <div class="text-xs text-ink-3">IVA {{ r.tax ?? 0 | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+                  } @else {
+                    <div class="text-xs text-ink-3">Ya asociada a esta factura</div>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        }
+        @if (err('goods_receipt_ids'); as e) {
+          <p class="field-error">{{ e }}</p>
+        } @else {
+          <p class="field-hint">Al marcar recepciones se prellenan el subtotal, el IVA y el vencimiento; todas deben pertenecer a la misma orden de compra.</p>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Datos de la factura ================= -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Datos de la factura</span></div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <app-field label="N° factura del proveedor" [required]="true" [control]="form.controls.supplier_invoice_number" [serverError]="err('supplier_invoice_number')" [submitted]="submitted()">
+        <input pInputText formControlName="supplier_invoice_number" class="w-full tabular" placeholder="Ej. FE-12345" maxlength="60" />
+      </app-field>
+      <app-field label="Fecha de emisión" [required]="true" [control]="form.controls.issue_date" [serverError]="err('issue_date')" [submitted]="submitted()">
+        <p-datepicker formControlName="issue_date" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full" />
+      </app-field>
+      <app-field
+        label="Fecha de vencimiento"
+        [required]="true"
+        [control]="form.controls.due_date"
+        [serverError]="err('due_date')"
+        [submitted]="submitted()"
+        hint="Se propone según los días de pago de la orden; puedes ajustarla."
+      >
+        <p-datepicker formControlName="due_date" dateFormat="dd/mm/yy" [showIcon]="true" [minDate]="minDueDate()" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full" />
+      </app-field>
+
+      <app-field label="Subtotal" [required]="true" [control]="form.controls.subtotal" [serverError]="err('subtotal')" [submitted]="submitted()">
+        <p-inputnumber
+          formControlName="subtotal"
+          mode="currency"
+          currency="COP"
+          locale="es-CO"
+          [minFractionDigits]="0"
+          [maxFractionDigits]="2"
+          [min]="0"
+          placeholder="$ 0"
+          styleClass="w-full"
+          inputStyleClass="w-full tabular text-right"
+          (onInput)="onSubtotalInput($event.value)"
+        />
+      </app-field>
+      <app-field label="IVA" [control]="form.controls.tax" [serverError]="err('tax')" [submitted]="submitted()">
+        <p-inputnumber
+          formControlName="tax"
+          mode="currency"
+          currency="COP"
+          locale="es-CO"
+          [minFractionDigits]="0"
+          [maxFractionDigits]="2"
+          [min]="0"
+          placeholder="$ 0"
+          styleClass="w-full"
+          inputStyleClass="w-full tabular text-right"
+          (onInput)="onTaxInput()"
+        />
+      </app-field>
+      <app-field label="Retención" [control]="form.controls.withholding" [serverError]="err('withholding')" [submitted]="submitted()" hint="Se descuenta del total a pagar.">
+        <p-inputnumber
+          formControlName="withholding"
+          mode="currency"
+          currency="COP"
+          locale="es-CO"
+          [minFractionDigits]="0"
+          [maxFractionDigits]="2"
+          [min]="0"
+          placeholder="$ 0"
+          styleClass="w-full"
+          inputStyleClass="w-full tabular text-right"
+        />
+      </app-field>
+
+      <div class="md:col-span-2 xl:col-span-2">
+        <app-field label="Observaciones" [control]="form.controls.notes" [serverError]="err('notes')" [submitted]="submitted()">
+          <textarea pTextarea formControlName="notes" rows="2" class="w-full" placeholder="Notas internas sobre la factura (opcional)"></textarea>
+        </app-field>
+      </div>
+      <div class="rounded-lg border border-line bg-canvas px-4 py-3 flex flex-col justify-center">
+        <div class="th-label">Total a pagar</div>
+        <div class="text-xl font-bold tabular mt-0.5" [class.text-ink]="total() > 0" [class.text-red-600]="total() <= 0">
+          {{ total() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+        </div>
+        @if (total() <= 0) {
+          <p class="field-error !mt-1">El total a pagar (subtotal + IVA − retención) debe ser mayor que cero.</p>
+        } @else {
+          <p class="text-xs text-ink-3 mt-1">Subtotal + IVA − retención.</p>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Adjuntos ================= -->
+  @if (invoice(); as inv) {
+    <app-attachments [type]="attachType" [documentId]="inv.id" [items]="inv.attachments ?? []" [canEdit]="true" title="Adjuntos" hint="Arrastra la factura escaneada o haz clic para seleccionar" (changed)="reloadInvoice()" />
+  } @else {
+    <div class="card">
+      <div class="card-header"><span class="card-title">Adjuntos</span></div>
+      <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+        <span class="material-symbols-outlined !text-[20px]">attach_file</span>
+        Podrás adjuntar la factura escaneada después de guardarla.
+      </div>
+    </div>
+  }
+
+  <div class="flex justify-end gap-2">
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" [disabled]="saving()" (onClick)="cancel()" />
+    <p-button label="Guardar" icon="pi pi-save" type="submit" [loading]="saving()" [disabled]="loading()" />
+  </div>
+</form>

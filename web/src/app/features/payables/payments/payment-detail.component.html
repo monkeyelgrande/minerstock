@@ -1,0 +1,114 @@
+@if (doc(); as d) {
+  <app-page-header
+    [title]="d.number"
+    [subtitle]="(d.supplier?.name ?? '—') + (d.supplier?.document_number ? ' · NIT ' + d.supplier?.document_number : '')"
+    [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Pagos a proveedores', route: '/pagos/pagos' }, { label: d.number }]"
+  >
+    <app-chip chip [tone]="payableTone(d.status)" [label]="d.status_label" />
+
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="cancelling()" (onClick)="cancelPayment()" />
+    }
+  </app-page-header>
+
+  @if (d.status === 'anulado') {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Pago anulado</div>
+        <div class="text-ink-2 mt-0.5">Los abonos fueron revertidos y las facturas recuperaron su saldo.</div>
+      </div>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Facturas pagadas</span>
+          <span class="text-xs text-ink-3">{{ allocations().length }} factura(s)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[680px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5">Factura</th>
+                <th class="th-label text-left px-3 py-2.5">N° proveedor</th>
+                <th class="th-label text-right px-3 py-2.5 w-40">Valor aplicado</th>
+                <th class="th-label text-right px-3 py-2.5 w-40">Saldo actual</th>
+                <th class="th-label text-left px-3 py-2.5 w-32">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of allocations(); track a.id) {
+                <tr class="border-b border-line last:border-b-0">
+                  <td class="px-5 py-3">
+                    @if (a.invoice) {
+                      <a class="doc-link" [routerLink]="['/pagos/facturas', a.invoice.id]">{{ a.invoice.number }}</a>
+                    } @else {
+                      <span class="text-ink-3">—</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">{{ a.invoice?.supplier_invoice_number || '—' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink">{{ a.amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">
+                    {{ a.invoice ? (a.invoice.balance | currency: 'COP' : 'symbol-narrow' : '1.0-0') : '—' }}
+                  </td>
+                  <td class="px-3 py-3">
+                    @if (a.invoice) {
+                      <app-chip [tone]="payableTone(a.invoice.status)" [label]="a.invoice.status_label" />
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="text-center py-8 text-sm text-ink-3">Sin facturas asociadas.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-end px-5 py-4 border-t border-line">
+          <dl class="grid grid-cols-[auto_minmax(150px,auto)] gap-x-8 text-sm tabular">
+            <dt class="text-base font-semibold text-ink">Total del pago</dt>
+            <dd class="text-right text-base font-semibold text-ink">{{ totalAllocated() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">Fecha</dt>
+          <dd class="text-ink text-right tabular">{{ d.date | date: 'dd/MM/yyyy' }}</dd>
+          <dt class="text-ink-3">Medio de pago</dt>
+          <dd class="text-ink text-right">{{ d.method_label }}</dd>
+          <dt class="text-ink-3">Referencia</dt>
+          <dd class="text-ink text-right tabular">{{ d.reference || '—' }}</dd>
+          <dt class="text-ink-3">Valor</dt>
+          <dd class="text-ink text-right tabular font-semibold">{{ d.amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          <dt class="text-ink-3">Registrado por</dt>
+          <dd class="text-ink text-right">{{ d.creator?.name ?? '—' }}</dd>
+          @if (d.notes) {
+            <dt class="text-ink-3 col-span-2 pt-1 border-t border-line">Observaciones</dt>
+            <dd class="text-ink-2 col-span-2 whitespace-pre-line">{{ d.notes }}</dd>
+          }
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body">
+          <app-timeline [events]="timeline()" />
+        </div>
+      </div>
+
+      <app-attachments type="supplier_payment" [documentId]="d.id" [items]="d.attachments ?? []" [canEdit]="canAttach()" (changed)="load()" />
+    </div>
+  </div>
+} @else {
+  <app-page-header title="Pago a proveedor" [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Pagos a proveedores', route: '/pagos/pagos' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando pago…</div>
+}

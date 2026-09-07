@@ -8,14 +8,19 @@ use App\Exceptions\DomainException;
 use App\Models\GoodsReceipt;
 use App\Models\GoodsReceiptItem;
 use App\Models\PurchaseOrderItem;
+use App\Models\SupplierCreditNote;
 use App\Models\SupplierReturn;
 use App\Models\User;
+use App\Services\Payables\CreditNoteService;
 use App\Services\Purchasing\LineItems;
 use Illuminate\Support\Facades\DB;
 
 class SupplierReturnService
 {
-    public function __construct(private readonly InventoryService $inventory) {}
+    public function __construct(
+        private readonly InventoryService $inventory,
+        private readonly CreditNoteService $creditNotes,
+    ) {}
 
     public function save(?SupplierReturn $return, array $data, User $user): SupplierReturn
     {
@@ -105,6 +110,9 @@ class SupplierReturnService
             }
             $return->forceFill(['status' => S::Confirmado, 'confirmed_at' => now()])->save();
 
+            // La devolución confirmada genera automáticamente su nota crédito.
+            $this->creditNotes->createFromReturn($return, $user);
+
             return $return;
         });
     }
@@ -113,7 +121,15 @@ class SupplierReturnService
     {
         $this->assertStatus($return, [S::Borrador, S::Confirmado], 'anular');
 
-        return DB::transaction(function () use ($return, $user) {
+        $note = SupplierCreditNote::query()
+            ->where('supplier_return_id', $return->id)
+            ->where('status', '!=', 'anulada')
+            ->first();
+        if ($note && (float) $note->applied_amount > 0) {
+            throw new DomainException("No se puede anular: la nota crédito {$note->number} ya fue aplicada a facturas.");
+        }
+
+        return DB::transaction(function () use ($return, $user, $note) {
             if ($return->status === S::Confirmado) {
                 $this->inventory->reverse($return, $user, "Anulación de devolución {$return->number}");
                 foreach ($return->items as $item) {
@@ -123,6 +139,7 @@ class SupplierReturnService
                         ->decrement('qty_returned_base', (float) $item->qty_base);
                 }
             }
+            $note?->forceFill(['status' => 'anulada'])->save();
             $return->forceFill(['status' => S::Anulado])->save();
 
             return $return;

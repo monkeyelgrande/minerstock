@@ -117,6 +117,18 @@
                 <a routerLink="/compras/ordenes" [queryParams]="{ status: 'aprobada' }" class="hover:underline">{{ d.purchase_orders.aprobada }} {{ d.purchase_orders.aprobada === 1 ? 'orden aprobada' : 'órdenes aprobadas' }} por emitir al proveedor</a>
               </li>
             }
+            @if (d.payables && d.payables.overdue_count > 0 && auth.can('supplier_payments.create')) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-red-600 mt-0.5">event_busy</span>
+                <a routerLink="/pagos/facturas" [queryParams]="{ status: 'vencida' }" class="hover:underline">{{ d.payables.overdue_count }} {{ d.payables.overdue_count === 1 ? 'factura vencida' : 'facturas vencidas' }} por pagar</a>
+              </li>
+            }
+            @if (d.payables && d.payables.available_credit > 0 && auth.can('supplier_credit_notes.update')) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-indigo-600 mt-0.5">credit_card</span>
+                <a routerLink="/pagos/notas-credito" [queryParams]="{ status: 'disponible' }" class="hover:underline">{{ d.payables.available_credit | currency: 'COP' : 'symbol-narrow' : '1.0-0' }} en notas crédito por aplicar</a>
+              </li>
+            }
             @if (d.stock && d.stock.below_min > 0) {
               <li class="flex items-start gap-2">
                 <span class="material-symbols-outlined !text-[18px] text-red-600 mt-0.5">warning</span>
@@ -142,7 +154,7 @@
               </li>
             }
           </ul>
-          @if (!d.approvals_pending?.purchase_requests && !d.approvals_pending?.purchase_orders && !d.purchase_requests?.aprobada && !d.quotations?.received && !d.purchase_orders?.aprobada && !d.purchase_requests?.rechazada && !d.stock?.below_min && !d.stock?.receipts_draft && !d.stock?.counts_open) {
+          @if (!d.approvals_pending?.purchase_requests && !d.approvals_pending?.purchase_orders && !d.purchase_requests?.aprobada && !d.quotations?.received && !d.purchase_orders?.aprobada && !d.purchase_requests?.rechazada && !d.stock?.below_min && !d.stock?.receipts_draft && !d.stock?.counts_open && !d.payables?.overdue_count && !d.payables?.available_credit) {
             <p class="text-sm text-ink-3">Nada pendiente por ahora.</p>
           }
         } @else {
@@ -156,7 +168,7 @@
       <div class="card-body text-sm text-ink-2 space-y-1.5">
         <div class="flex items-center gap-2"><span class="chip chip-success">Fase 1</span> Compras</div>
         <div class="flex items-center gap-2"><span class="chip chip-success">Fase 2</span> Inventario</div>
-        <div class="flex items-center gap-2 text-ink-3"><span class="chip chip-draft">Fase 3</span> Cuentas por pagar</div>
+        <div class="flex items-center gap-2"><span class="chip chip-success">Fase 3</span> Cuentas por pagar</div>
         <div class="flex items-center gap-2 text-ink-3"><span class="chip chip-draft">Fase 4</span> Logística</div>
       </div>
     </div>
