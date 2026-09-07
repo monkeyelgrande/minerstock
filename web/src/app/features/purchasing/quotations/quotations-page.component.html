@@ -1,0 +1,131 @@
+<app-page-header
+  title="Cotizaciones"
+  subtitle="Ofertas de proveedores para las solicitudes aprobadas"
+  [crumbs]="[{ label: 'Compras' }, { label: 'Cotizaciones' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Nueva cotización" icon="pi pi-plus" (onClick)="goCreate()" />
+  }
+</app-page-header>
+
+<app-crud-toolbar
+  [(search)]="search"
+  searchPlaceholder="Buscar por número, proveedor o producto…"
+  [showActiveFilter]="false"
+  [createLabel]="null"
+>
+  <p-select
+    [options]="suppliers()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Proveedor"
+    [showClear]="true"
+    [filter]="suppliers().length > 8"
+    filterPlaceholder="Buscar proveedor…"
+    [ngModel]="supplierId()"
+    (ngModelChange)="setSupplier($event)"
+    styleClass="w-56"
+  />
+  <p-select
+    [options]="statusOptions"
+    optionLabel="label"
+    optionValue="value"
+    placeholder="Estado"
+    [ngModel]="status()"
+    (ngModelChange)="setStatus($event)"
+    styleClass="w-40"
+  />
+  <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer select-none">
+    <p-toggleswitch [ngModel]="onlyValid()" (ngModelChange)="setOnlyValid($event)" inputId="q_only_valid" />
+    <span>Solo vigentes</span>
+  </label>
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="created_at"
+    [sortOrder]="-1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="number" class="w-32">Número <p-sortIcon field="number" /></th>
+        <th>Proveedor</th>
+        <th pSortableColumn="date" class="w-28">Fecha <p-sortIcon field="date" /></th>
+        <th pSortableColumn="valid_until" class="w-40">Válida hasta <p-sortIcon field="valid_until" /></th>
+        <th class="w-20 text-right">Ítems</th>
+        <th pSortableColumn="total" class="w-40 text-right">Total <p-sortIcon field="total" /></th>
+        <th pSortableColumn="status" class="w-36">Estado <p-sortIcon field="status" /></th>
+        <th class="w-32 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/compras/cotizaciones', row.id]">{{ row.number }}</a>
+        </td>
+        <td>
+          <div class="text-ink">{{ row.supplier?.name ?? '—' }}</div>
+          @if (row.supplier?.document_number) {
+            <div class="text-xs text-ink-3 tabular">NIT {{ row.supplier.document_number }}</div>
+          }
+        </td>
+        <td class="tabular text-ink-2">{{ row.date | date: 'dd/MM/yyyy' }}</td>
+        <td class="tabular text-ink-2">
+          @if (row.valid_until) {
+            <span class="inline-flex items-center gap-2">
+              {{ row.valid_until | date: 'dd/MM/yyyy' }}
+              @if (row.is_expired) {
+                <span class="chip chip-danger !h-5">Vencida</span>
+              }
+            </span>
+          } @else {
+            <span class="text-ink-3">Sin vencimiento</span>
+          }
+        </td>
+        <td class="tabular text-right">{{ row.items_count ?? '—' }}</td>
+        <td class="tabular text-right font-medium text-ink">{{ row.total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td><app-chip [tone]="statusTone(row.status)" [label]="row.status_label" /></td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver detalle" (onClick)="goDetail(row)" />
+          @if (row.is_editable && canUpdate()) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="goEdit(row)" />
+          }
+          @if (row.status === 'borrador' && canDelete()) {
+            <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Eliminar" (onClick)="remove(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="8" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">request_quote</span>
+            <span class="text-sm">
+              @if (hasFilters()) {
+                No hay cotizaciones que coincidan con los filtros.
+              } @else {
+                Aún no hay cotizaciones registradas.
+              }
+            </span>
+            @if (canCreate() && !hasFilters()) {
+              <p-button label="Registrar la primera cotización" icon="pi pi-plus" [text]="true" size="small" (onClick)="goCreate()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

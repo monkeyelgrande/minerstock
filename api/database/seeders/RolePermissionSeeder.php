@@ -20,6 +20,11 @@ class RolePermissionSeeder extends Seeder
         'roles.view', 'roles.update',
         'settings.view', 'settings.update',
         'activity_log.view',
+        // Compras (fase 1)
+        'purchase_requests.view', 'purchase_requests.create', 'purchase_requests.update', 'purchase_requests.delete', 'purchase_requests.approve',
+        'quotations.view', 'quotations.create', 'quotations.update', 'quotations.delete',
+        'purchase_orders.view', 'purchase_orders.create', 'purchase_orders.update', 'purchase_orders.delete', 'purchase_orders.approve', 'purchase_orders.issue',
+        'approvals.view',
     ];
 
     public function run(): void
@@ -41,19 +46,25 @@ class RolePermissionSeeder extends Seeder
         $views = array_map(fn ($r) => "{$r}.view", $this->crud);
         $catalogViews = array_filter($views, fn ($v) => $v !== 'users.view');
 
+        $requestsBasic = ['purchase_requests.view', 'purchase_requests.create', 'purchase_requests.update', 'purchase_requests.delete'];
+        $purchasingViews = ['purchase_requests.view', 'quotations.view', 'purchase_orders.view', 'approvals.view'];
+
         $matrix = [
             'admin' => $all,
-            'solicitante' => ['products.view', 'product_categories.view', 'units.view', 'warehouses.view', 'sites.view'],
-            'aprobador' => $catalogViews,
-            'comprador' => array_merge($catalogViews, [
+            'solicitante' => array_merge(['products.view', 'product_categories.view', 'units.view', 'warehouses.view', 'sites.view'], $requestsBasic),
+            'aprobador' => array_merge($catalogViews, $purchasingViews, ['purchase_requests.approve', 'purchase_orders.approve']),
+            'comprador' => array_merge($catalogViews, $requestsBasic, [
                 'suppliers.create', 'suppliers.update', 'suppliers.delete',
                 'products.create', 'products.update',
                 'product_categories.create', 'product_categories.update',
                 'vehicles.create', 'vehicles.update', 'drivers.create', 'drivers.update',
+                'quotations.view', 'quotations.create', 'quotations.update', 'quotations.delete',
+                'purchase_orders.view', 'purchase_orders.create', 'purchase_orders.update', 'purchase_orders.delete', 'purchase_orders.issue',
+                'approvals.view',
             ]),
-            'tesoreria' => ['suppliers.view'],
-            'bodeguero' => array_merge($catalogViews, ['recipients.create', 'recipients.update']),
-            'consulta' => $catalogViews,
+            'tesoreria' => ['suppliers.view', 'purchase_orders.view'],
+            'bodeguero' => array_merge($catalogViews, ['recipients.create', 'recipients.update'], $requestsBasic),
+            'consulta' => array_merge($catalogViews, $purchasingViews),
         ];
 
         foreach (config('minerstock.roles') as $name => $label) {

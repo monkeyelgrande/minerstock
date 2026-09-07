@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\SettingController;
 use App\Http\Controllers\Api\Admin\UserController;
+use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Catalog\CostCenterController;
 use App\Http\Controllers\Api\Catalog\DriverController;
@@ -14,7 +15,13 @@ use App\Http\Controllers\Api\Catalog\SupplierController;
 use App\Http\Controllers\Api\Catalog\UnitController;
 use App\Http\Controllers\Api\Catalog\VehicleController;
 use App\Http\Controllers\Api\Catalog\WarehouseController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\HealthController;
+use App\Http\Controllers\Api\Purchasing\ApprovalController;
+use App\Http\Controllers\Api\Purchasing\ComparisonController;
+use App\Http\Controllers\Api\Purchasing\PurchaseOrderController;
+use App\Http\Controllers\Api\Purchasing\PurchaseRequestController;
+use App\Http\Controllers\Api\Purchasing\QuotationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -37,6 +44,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
     Route::put('/auth/profile', [AuthController::class, 'updateProfile'])->name('auth.profile');
     Route::put('/auth/password', [AuthController::class, 'changePassword'])->name('auth.password');
+
+    Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
     // Catálogo (maestros)
     Route::prefix('catalog')->name('catalog.')->group(function () {
@@ -61,6 +70,59 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::delete("{$uri}/{id}", [$controller, 'destroy'])->middleware("permission:{$perm}.delete")->name("{$perm}.destroy");
         }
     });
+
+    // Compras
+    Route::prefix('purchasing')->name('purchasing.')->group(function () {
+        // Solicitudes de compra
+        Route::get('purchase-requests', [PurchaseRequestController::class, 'index'])->middleware('permission:purchase_requests.view');
+        Route::get('purchase-requests/counts', [PurchaseRequestController::class, 'counts'])->middleware('permission:purchase_requests.view');
+        Route::get('purchase-requests/pending-items', [PurchaseRequestController::class, 'pendingItems'])->middleware('permission:purchase_requests.view');
+        Route::get('purchase-requests/{id}', [PurchaseRequestController::class, 'show'])->middleware('permission:purchase_requests.view');
+        Route::post('purchase-requests', [PurchaseRequestController::class, 'store'])->middleware('permission:purchase_requests.create');
+        Route::put('purchase-requests/{id}', [PurchaseRequestController::class, 'update'])->middleware('permission:purchase_requests.update');
+        Route::post('purchase-requests/{id}/submit', [PurchaseRequestController::class, 'submit'])->middleware('permission:purchase_requests.update');
+        Route::post('purchase-requests/{id}/approve', [PurchaseRequestController::class, 'approve'])->middleware('permission:purchase_requests.approve');
+        Route::post('purchase-requests/{id}/reject', [PurchaseRequestController::class, 'reject'])->middleware('permission:purchase_requests.approve');
+        Route::post('purchase-requests/{id}/cancel', [PurchaseRequestController::class, 'cancel'])->middleware('permission:purchase_requests.delete');
+        Route::post('purchase-requests/{id}/close', [PurchaseRequestController::class, 'close'])->middleware('permission:purchase_requests.update');
+
+        // Cotizaciones
+        Route::get('quotations', [QuotationController::class, 'index'])->middleware('permission:quotations.view');
+        Route::get('quotations/{id}', [QuotationController::class, 'show'])->middleware('permission:quotations.view');
+        Route::post('quotations', [QuotationController::class, 'store'])->middleware('permission:quotations.create');
+        Route::put('quotations/{id}', [QuotationController::class, 'update'])->middleware('permission:quotations.update');
+        Route::delete('quotations/{id}', [QuotationController::class, 'destroy'])->middleware('permission:quotations.delete');
+        Route::post('quotations/{id}/receive', [QuotationController::class, 'receive'])->middleware('permission:quotations.update');
+        Route::post('quotations/{id}/discard', [QuotationController::class, 'discard'])->middleware('permission:quotations.update');
+
+        // Comparativa
+        Route::get('comparison', [ComparisonController::class, 'index'])->middleware('permission:quotations.view');
+        Route::post('comparison/select', [ComparisonController::class, 'select'])->middleware('permission:quotations.update');
+        Route::post('comparison/generate-orders', [ComparisonController::class, 'generateOrders'])->middleware('permission:purchase_orders.create');
+
+        // Órdenes de compra
+        Route::get('purchase-orders', [PurchaseOrderController::class, 'index'])->middleware('permission:purchase_orders.view');
+        Route::get('purchase-orders/counts', [PurchaseOrderController::class, 'counts'])->middleware('permission:purchase_orders.view');
+        Route::get('purchase-orders/{id}', [PurchaseOrderController::class, 'show'])->middleware('permission:purchase_orders.view');
+        Route::get('purchase-orders/{id}/pdf', [PurchaseOrderController::class, 'pdf'])->middleware('permission:purchase_orders.view');
+        Route::post('purchase-orders', [PurchaseOrderController::class, 'store'])->middleware('permission:purchase_orders.create');
+        Route::put('purchase-orders/{id}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchase_orders.update');
+        Route::post('purchase-orders/{id}/submit', [PurchaseOrderController::class, 'submit'])->middleware('permission:purchase_orders.update');
+        Route::post('purchase-orders/{id}/approve', [PurchaseOrderController::class, 'approve'])->middleware('permission:purchase_orders.approve');
+        Route::post('purchase-orders/{id}/reject', [PurchaseOrderController::class, 'reject'])->middleware('permission:purchase_orders.approve');
+        Route::post('purchase-orders/{id}/reopen', [PurchaseOrderController::class, 'reopen'])->middleware('permission:purchase_orders.update');
+        Route::post('purchase-orders/{id}/issue', [PurchaseOrderController::class, 'issue'])->middleware('permission:purchase_orders.issue');
+        Route::post('purchase-orders/{id}/cancel', [PurchaseOrderController::class, 'cancel'])->middleware('permission:purchase_orders.delete');
+        Route::post('purchase-orders/{id}/close', [PurchaseOrderController::class, 'close'])->middleware('permission:purchase_orders.update');
+
+        // Bandeja de aprobaciones
+        Route::get('approvals/inbox', [ApprovalController::class, 'inbox'])->middleware('permission:approvals.view');
+        Route::get('approvals/history', [ApprovalController::class, 'history'])->middleware('permission:approvals.view');
+    });
+
+    // Adjuntos
+    Route::post('attachments', [AttachmentController::class, 'store'])->name('attachments.store');
+    Route::delete('attachments/{id}', [AttachmentController::class, 'destroy'])->name('attachments.destroy');
 
     // Administración
     Route::prefix('admin')->name('admin.')->group(function () {

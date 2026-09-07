@@ -316,7 +316,7 @@ Tabla estándar de Laravel. Eventos iniciales: solicitud pendiente de aprobació
 3. **Conversión al confirmar.** `factor` se copia al ítem en el momento de crearlo; cambios posteriores en el maestro no afectan documentos existentes.
 4. **Acumulados siempre desde hijos.** `qty_received_base`, `qty_ordered_base`, `paid_amount`, etc. se recalculan a partir de los documentos hijos al confirmar/anular, nunca se editan a mano.
 5. **Aprobación obligatoria.** Toda solicitud y toda OC pasan por `pendiente_aprobacion` y solo el rol aprobador las mueve a `aprobada` o `rechazada`. Una OC solo se emite al proveedor desde `aprobada`. Editar una OC aprobada la regresa a borrador y exige nueva aprobación. Un rechazo regresa el documento a borrador con el comentario.
-6. **Visibilidad por bodega.** Las consultas de documentos e inventario filtran por las bodegas asignadas al usuario, salvo `admin` y `consulta`.
+6. **Visibilidad por bodega.** Las consultas de documentos e inventario filtran por las bodegas asignadas al usuario cuando este solo tiene roles de campo (`bodeguero`, `solicitante`). Los roles de oficina (`admin`, `consulta`, `aprobador`, `comprador`, `tesoreria`) ven todas las bodegas.
 
 ## 10. Diagrama de relaciones (resumen)
 

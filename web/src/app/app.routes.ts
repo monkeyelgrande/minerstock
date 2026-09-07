@@ -23,6 +23,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/auth/profile.component').then((m) => m.ProfileComponent),
       },
       {
+        path: 'compras',
+        canActivateChild: [permissionGuard],
+        loadChildren: () => import('./features/purchasing/purchasing.routes').then((m) => m.PURCHASING_ROUTES),
+      },
+      {
         path: 'catalogo',
         canActivateChild: [permissionGuard],
         loadChildren: () => import('./features/catalog/catalog.routes').then((m) => m.CATALOG_ROUTES),

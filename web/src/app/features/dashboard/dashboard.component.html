@@ -1,0 +1,146 @@
+<app-page-header [title]="greeting()" [subtitle]="subtitle()" [crumbs]="[{ label: 'Dashboard' }]" />
+
+@if (kpis().length) {
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+    @for (k of kpis(); track k.label) {
+      <a [routerLink]="k.route" class="card p-5 flex flex-col justify-between hover:border-line-strong transition-colors">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <span class="th-label block truncate">{{ k.label }}</span>
+            <span class="text-[28px] leading-9 font-bold text-ink tabular mt-1 block">{{ k.value }}</span>
+          </div>
+          <div class="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" [class]="k.tone">
+            <span class="material-symbols-outlined !text-[24px]">{{ k.icon }}</span>
+          </div>
+        </div>
+        <div class="mt-4 -mx-5 -mb-5 px-5 py-2.5 bg-canvas/70 text-xs text-ink-3 truncate">{{ k.note }}</div>
+      </a>
+    }
+  </div>
+}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+  <div class="lg:col-span-2 space-y-4">
+    @if (data()?.recent_orders; as orders) {
+      <div class="card overflow-hidden">
+        <div class="card-header">
+          <span class="card-title">Órdenes de compra recientes</span>
+          <a routerLink="/compras/ordenes" class="text-sm font-medium text-link hover:underline flex items-center gap-1">
+            Ver todas <span class="material-symbols-outlined !text-[16px]">arrow_forward</span>
+          </a>
+        </div>
+        @if (orders.length) {
+          <table class="w-full text-left text-sm">
+            <thead>
+              <tr class="bg-[#F8FAFC] border-b border-[#CBD5E1]">
+                <th class="th-label px-5 py-2.5">Número</th>
+                <th class="th-label px-4 py-2.5">Proveedor</th>
+                <th class="th-label px-4 py-2.5">Fecha</th>
+                <th class="th-label px-4 py-2.5 text-right">Total</th>
+                <th class="th-label px-4 py-2.5">Estado</th>
+                <th class="th-label px-5 py-2.5 w-36">% recibido</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-line">
+              @for (o of orders; track o.id) {
+                <tr class="hover:bg-canvas/60">
+                  <td class="px-5 py-3"><a [routerLink]="['/compras/ordenes', o.id]" class="doc-link">{{ o.number }}</a></td>
+                  <td class="px-4 py-3 font-medium text-ink">{{ o.supplier }}</td>
+                  <td class="px-4 py-3 text-ink-2 whitespace-nowrap">{{ o.date | date: 'd MMM y' }}</td>
+                  <td class="px-4 py-3 text-right tabular font-medium">{{ o.total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-4 py-3"><app-chip [tone]="statusTone(o.status)" [label]="o.status_label" /></td>
+                  <td class="px-5 py-3">
+                    <div class="flex items-center gap-2">
+                      <div class="flex-1 h-1.5 rounded-full bg-line overflow-hidden">
+                        <div class="h-full rounded-full bg-brand" [style.width.%]="o.received_pct"></div>
+                      </div>
+                      <span class="text-[11px] text-ink-3 tabular w-8 text-right">{{ o.received_pct }}%</span>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <div class="card-body text-sm text-ink-3 text-center py-8">Aún no hay órdenes de compra.</div>
+        }
+      </div>
+    }
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Accesos rápidos</span></div>
+      <div class="card-body">
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+          @for (link of quickLinks(); track link.route) {
+            <a [routerLink]="link.route" class="flex items-center gap-2 rounded-lg border border-line px-3 py-2.5 hover:border-brand hover:bg-amber-50/40 transition-colors">
+              <span class="material-symbols-outlined text-brand">{{ link.icon }}</span>
+              <span class="text-sm font-medium">{{ link.label }}</span>
+            </a>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-4">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Pendientes por hacer</span></div>
+      <div class="card-body">
+        @if (data(); as d) {
+          <ul class="space-y-3 text-sm">
+            @if (d.approvals_pending && (d.approvals_pending.purchase_requests + d.approvals_pending.purchase_orders) > 0 && auth.can(['purchase_requests.approve', 'purchase_orders.approve'])) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-violet-600 mt-0.5">verified</span>
+                <a routerLink="/compras/aprobaciones" class="hover:underline">
+                  @let pend = d.approvals_pending.purchase_requests + d.approvals_pending.purchase_orders;
+                  {{ pend }} {{ pend === 1 ? 'documento espera' : 'documentos esperan' }} tu aprobación
+                </a>
+              </li>
+            }
+            @if (d.purchase_requests && d.purchase_requests.aprobada > 0 && auth.can('quotations.create')) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-amber-600 mt-0.5">assignment_turned_in</span>
+                <a routerLink="/compras/solicitudes" [queryParams]="{ status: 'aprobada' }" class="hover:underline">
+                  {{ d.purchase_requests.aprobada }} {{ d.purchase_requests.aprobada === 1 ? 'solicitud aprobada' : 'solicitudes aprobadas' }} por cotizar
+                </a>
+              </li>
+            }
+            @if (d.quotations && d.quotations.received > 0 && auth.can('quotations.view')) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-blue-600 mt-0.5">compare_arrows</span>
+                <a routerLink="/compras/comparativa" class="hover:underline">{{ d.quotations.received }} {{ d.quotations.received === 1 ? 'cotización recibida' : 'cotizaciones recibidas' }} para comparar</a>
+              </li>
+            }
+            @if (d.purchase_orders && d.purchase_orders.aprobada > 0 && auth.can('purchase_orders.issue')) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-emerald-600 mt-0.5">send</span>
+                <a routerLink="/compras/ordenes" [queryParams]="{ status: 'aprobada' }" class="hover:underline">{{ d.purchase_orders.aprobada }} {{ d.purchase_orders.aprobada === 1 ? 'orden aprobada' : 'órdenes aprobadas' }} por emitir al proveedor</a>
+              </li>
+            }
+            @if (d.purchase_requests && d.purchase_requests.rechazada > 0) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-red-600 mt-0.5">error</span>
+                <a routerLink="/compras/solicitudes" [queryParams]="{ status: 'rechazada' }" class="hover:underline">{{ d.purchase_requests.rechazada }} {{ d.purchase_requests.rechazada === 1 ? 'solicitud rechazada' : 'solicitudes rechazadas' }} por corregir</a>
+              </li>
+            }
+          </ul>
+          @if (!d.approvals_pending?.purchase_requests && !d.approvals_pending?.purchase_orders && !d.purchase_requests?.aprobada && !d.quotations?.received && !d.purchase_orders?.aprobada && !d.purchase_requests?.rechazada) {
+            <p class="text-sm text-ink-3">Nada pendiente por ahora.</p>
+          }
+        } @else {
+          <p class="text-sm text-ink-3">Cargando…</p>
+        }
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Próximas fases</span></div>
+      <div class="card-body text-sm text-ink-2 space-y-1.5">
+        <div class="flex items-center gap-2"><span class="chip chip-success">Fase 1</span> Compras</div>
+        <div class="flex items-center gap-2 text-ink-3"><span class="chip chip-draft">Fase 2</span> Inventario municipio</div>
+        <div class="flex items-center gap-2 text-ink-3"><span class="chip chip-draft">Fase 3</span> Cuentas por pagar</div>
+        <div class="flex items-center gap-2 text-ink-3"><span class="chip chip-draft">Fase 4</span> Logística</div>
+      </div>
+    </div>
+  </div>
+</div>
