@@ -17,6 +17,7 @@ interface DashboardData {
   recent_orders?: { id: number; number: string; supplier: string; date: string; total: number; status: string; status_label: string; received_pct: number }[];
   quotations?: { expiring: number; received: number };
   approvals_pending?: { purchase_requests: number; purchase_orders: number };
+  stock?: { total_value: number; products_with_stock: number; below_min: number; in_transit_value: number; on_loan_count: number; receipts_draft: number; counts_open: number };
 }
 
 interface Kpi {
@@ -104,6 +105,16 @@ export class DashboardComponent {
         route: '/compras/comparativa',
       });
     }
+    if (d?.stock) {
+      list.push({
+        label: 'Valor del inventario',
+        value: new CurrencyPipe('es-CO').transform(d.stock.total_value, 'COP', 'symbol-narrow', '1.0-0') ?? '$0',
+        icon: 'layers',
+        tone: d.stock.below_min > 0 ? 'bg-red-50 text-red-700' : 'bg-teal-50 text-teal-700',
+        note: d.stock.below_min > 0 ? `${d.stock.below_min} ${d.stock.below_min === 1 ? 'producto' : 'productos'} bajo mínimo` : `${d.stock.products_with_stock} productos con existencias`,
+        route: '/inventario/stock',
+      });
+    }
     if (d?.approvals_pending && this.auth.can(['purchase_requests.approve', 'purchase_orders.approve'])) {
       list.push({
         label: 'Aprobaciones pendientes',
@@ -123,6 +134,8 @@ export class DashboardComponent {
       { label: 'Nueva solicitud', icon: 'assignment_add', route: '/compras/solicitudes/nueva', perm: 'purchase_requests.create' },
       { label: 'Cotizaciones', icon: 'request_quote', route: '/compras/cotizaciones', perm: 'quotations.view' },
       { label: 'Comparativa', icon: 'compare_arrows', route: '/compras/comparativa', perm: 'quotations.view' },
+      { label: 'Stock', icon: 'layers', route: '/inventario/stock', perm: 'stock.view' },
+      { label: 'Nueva recepción', icon: 'inventory', route: '/inventario/recepciones/nueva', perm: 'goods_receipts.create' },
       { label: 'Productos', icon: 'inventory_2', route: '/catalogo/productos', perm: 'products.view' },
       { label: 'Proveedores', icon: 'storefront', route: '/catalogo/proveedores', perm: 'suppliers.view' },
       { label: 'Usuarios', icon: 'manage_accounts', route: '/admin/usuarios', perm: 'users.view' },

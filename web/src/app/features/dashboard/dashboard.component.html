@@ -117,6 +117,24 @@
                 <a routerLink="/compras/ordenes" [queryParams]="{ status: 'aprobada' }" class="hover:underline">{{ d.purchase_orders.aprobada }} {{ d.purchase_orders.aprobada === 1 ? 'orden aprobada' : 'órdenes aprobadas' }} por emitir al proveedor</a>
               </li>
             }
+            @if (d.stock && d.stock.below_min > 0) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-red-600 mt-0.5">warning</span>
+                <a routerLink="/inventario/stock" [queryParams]="{ below_min: 1 }" class="hover:underline">{{ d.stock.below_min }} {{ d.stock.below_min === 1 ? 'producto' : 'productos' }} bajo el stock mínimo</a>
+              </li>
+            }
+            @if (d.stock && d.stock.receipts_draft > 0 && auth.can('goods_receipts.update')) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-teal-600 mt-0.5">inventory</span>
+                <a routerLink="/inventario/recepciones" [queryParams]="{ status: 'borrador' }" class="hover:underline">{{ d.stock.receipts_draft }} {{ d.stock.receipts_draft === 1 ? 'recepción en borrador' : 'recepciones en borrador' }} por confirmar</a>
+              </li>
+            }
+            @if (d.stock && d.stock.counts_open > 0 && auth.can('stock_counts.update')) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-blue-600 mt-0.5">checklist</span>
+                <a routerLink="/inventario/conteos" [queryParams]="{ status: 'en_proceso' }" class="hover:underline">{{ d.stock.counts_open }} {{ d.stock.counts_open === 1 ? 'conteo físico en proceso' : 'conteos físicos en proceso' }}</a>
+              </li>
+            }
             @if (d.purchase_requests && d.purchase_requests.rechazada > 0) {
               <li class="flex items-start gap-2">
                 <span class="material-symbols-outlined !text-[18px] text-red-600 mt-0.5">error</span>
@@ -124,7 +142,7 @@
               </li>
             }
           </ul>
-          @if (!d.approvals_pending?.purchase_requests && !d.approvals_pending?.purchase_orders && !d.purchase_requests?.aprobada && !d.quotations?.received && !d.purchase_orders?.aprobada && !d.purchase_requests?.rechazada) {
+          @if (!d.approvals_pending?.purchase_requests && !d.approvals_pending?.purchase_orders && !d.purchase_requests?.aprobada && !d.quotations?.received && !d.purchase_orders?.aprobada && !d.purchase_requests?.rechazada && !d.stock?.below_min && !d.stock?.receipts_draft && !d.stock?.counts_open) {
             <p class="text-sm text-ink-3">Nada pendiente por ahora.</p>
           }
         } @else {
@@ -137,7 +155,7 @@
       <div class="card-header"><span class="card-title">Próximas fases</span></div>
       <div class="card-body text-sm text-ink-2 space-y-1.5">
         <div class="flex items-center gap-2"><span class="chip chip-success">Fase 1</span> Compras</div>
-        <div class="flex items-center gap-2 text-ink-3"><span class="chip chip-draft">Fase 2</span> Inventario municipio</div>
+        <div class="flex items-center gap-2"><span class="chip chip-success">Fase 2</span> Inventario</div>
         <div class="flex items-center gap-2 text-ink-3"><span class="chip chip-draft">Fase 3</span> Cuentas por pagar</div>
         <div class="flex items-center gap-2 text-ink-3"><span class="chip chip-draft">Fase 4</span> Logística</div>
       </div>

@@ -50,6 +50,12 @@ class Product extends Model
         return $this->hasMany(WarehouseProduct::class);
     }
 
+    /** Saldos de stock por bodega. */
+    public function stockBalances(): HasMany
+    {
+        return $this->hasMany(StockBalance::class);
+    }
+
     /**
      * Devuelve el factor de conversión de la unidad dada hacia la unidad base.
      * La unidad base siempre tiene factor 1.

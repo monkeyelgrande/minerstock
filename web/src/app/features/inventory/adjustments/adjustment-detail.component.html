@@ -1,0 +1,156 @@
+@if (adjustment(); as a) {
+  <app-page-header
+    [title]="a.number"
+    [subtitle]="a.reason_label + ' · ' + (a.warehouse?.name ?? '—')"
+    [crumbs]="[{ label: 'Inventario' }, { label: 'Ajustes de inventario', route: '/inventario/ajustes' }, { label: a.number }]"
+  >
+    <app-chip chip [tone]="statusTone(a.status)" [label]="a.status_label" />
+
+    @if (showEdit()) {
+      <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [outlined]="true" (onClick)="goEdit()" />
+    }
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="acting() === 'cancel'" [disabled]="!!acting()" (onClick)="cancelAdjustment()" />
+    }
+    @if (showConfirm()) {
+      <p-button label="Confirmar" icon="pi pi-check" [loading]="acting() === 'confirm'" [disabled]="!!acting()" (onClick)="confirmAdjustment()" />
+    }
+  </app-page-header>
+
+  <!-- ================= Bandas de estado ================= -->
+  @if (a.status === 'anulado') {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Ajuste anulado</div>
+        <div class="text-ink-2 mt-0.5">{{ a.confirmed_at ? 'Los movimientos aplicados al stock fueron reversados en el kardex.' : 'Este ajuste no tuvo efecto sobre el inventario.' }}</div>
+      </div>
+    </div>
+  }
+  @if (a.stock_count; as c) {
+    <div class="flex items-start gap-3 rounded-card border border-[#DDD6FE] bg-[#F5F3FF] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#5B21B6] !text-[20px]">fact_check</span>
+      <div>
+        <div class="font-semibold text-[#5B21B6]">
+          Generado por el conteo <a class="doc-link" [routerLink]="['/inventario/conteos', c.id]">{{ c.number }}</a>
+        </div>
+        <div class="text-ink-2 mt-0.5">Las líneas corresponden a las diferencias entre el stock del sistema y lo contado. No se edita manualmente.</div>
+      </div>
+    </div>
+  } @else if (a.status === 'borrador') {
+    <div class="flex items-start gap-3 rounded-card border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#1D4ED8] !text-[20px]">info</span>
+      <div class="text-ink-2">El ajuste está en borrador y aún no afecta el stock. Confírmalo para aplicar las entradas y salidas al kardex.</div>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Ítems</span>
+          <span class="text-xs text-ink-3">{{ items().length }} línea(s) · {{ totals().entriesQty }} entrada(s) · {{ totals().exitsQty }} salida(s)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[820px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5">Producto</th>
+                <th class="th-label text-left px-3 py-2.5 w-28">Movimiento</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Cantidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Costo unit.</th>
+                <th class="th-label text-right px-3 py-2.5 w-36">Valor</th>
+                <th class="th-label text-left px-3 py-2.5 min-w-[160px]">Observación</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of items(); track it.id) {
+                <tr class="border-b border-line last:border-b-0 align-top">
+                  <td class="px-5 py-3">
+                    <div class="text-sm font-medium text-ink">{{ it.product?.name ?? '—' }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product?.sku }}</div>
+                  </td>
+                  <td class="px-3 py-3">
+                    @if (isEntry(it)) {
+                      <span class="chip chip-success"><i class="pi pi-arrow-down !text-[10px] mr-1"></i>Entrada</span>
+                    } @else {
+                      <span class="chip chip-danger"><i class="pi pi-arrow-up !text-[10px] mr-1"></i>Salida</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink">
+                    {{ absQty(it) | number: '1.0-3' }} <span class="text-xs text-ink-3">{{ it.product?.base_unit }}</span>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">
+                    @if (it.unit_cost !== null) {
+                      {{ it.unit_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+                    } @else {
+                      <span class="text-ink-3" pTooltip="Se toma el costo promedio al confirmar" tooltipPosition="top">Promedio</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium" [class.text-[#065F46]]="isEntry(it)" [class.text-[#B91C1C]]="!isEntry(it)">
+                    @if (it.line_cost !== null) {
+                      {{ (isEntry(it) ? '+' : '−') }}{{ (it.line_cost < 0 ? -it.line_cost : it.line_cost) | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+                    } @else {
+                      <span class="text-ink-3 font-normal">—</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-ink-2">{{ it.notes || '—' }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="6" class="text-center py-8 text-sm text-ink-3">Sin ítems.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="flex justify-end px-5 py-4 border-t border-line">
+          <dl class="grid grid-cols-[auto_minmax(140px,auto)] gap-x-8 gap-y-1 text-sm tabular min-w-[280px]">
+            <dt class="text-ink-2">Valor entradas</dt>
+            <dd class="text-right text-[#065F46]">{{ totals().entries | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            <dt class="text-ink-2">Valor salidas</dt>
+            <dd class="text-right text-[#B91C1C]">{{ totals().exits | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            <dt class="text-base font-semibold text-ink pt-1 border-t border-line">Efecto neto</dt>
+            <dd class="text-right text-base font-semibold text-ink pt-1 border-t border-line">{{ totals().net | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">Bodega</dt>
+          <dd class="text-ink text-right">{{ a.warehouse?.name ?? '—' }} @if (a.warehouse?.code) { <span class="text-xs text-ink-3 tabular">{{ a.warehouse?.code }}</span> }</dd>
+          <dt class="text-ink-3">Fecha</dt>
+          <dd class="text-ink text-right tabular">{{ a.date | date: 'dd/MM/yyyy' }}</dd>
+          <dt class="text-ink-3">Motivo</dt>
+          <dd class="text-ink text-right">{{ a.reason_label }}</dd>
+          <dt class="text-ink-3">Creado por</dt>
+          <dd class="text-ink text-right">{{ a.creator?.name ?? '—' }}</dd>
+          @if (a.confirmed_at) {
+            <dt class="text-ink-3">Confirmado</dt>
+            <dd class="text-ink text-right tabular">{{ a.confirmed_at | date: 'd MMM y, HH:mm' }}</dd>
+          }
+          @if (a.notes) {
+            <dt class="text-ink-3 col-span-2 pt-1 border-t border-line">Observaciones</dt>
+            <dd class="text-ink-2 col-span-2 whitespace-pre-line">{{ a.notes }}</dd>
+          }
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body">
+          <app-timeline [events]="timeline()" />
+        </div>
+      </div>
+
+      <app-attachments [type]="attachType" [documentId]="a.id" [items]="a.attachments ?? []" [canEdit]="canUpdate()" (changed)="load()" />
+    </div>
+  </div>
+} @else {
+  <app-page-header title="Ajuste de inventario" [crumbs]="[{ label: 'Inventario' }, { label: 'Ajustes de inventario', route: '/inventario/ajustes' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando ajuste…</div>
+}

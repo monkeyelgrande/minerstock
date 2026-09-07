@@ -94,6 +94,11 @@ Todas las rutas van bajo `/api`. Salvo `health` y `auth/login`, requieren `Autho
 | CRUD + acciones | `/purchasing/purchase-orders` (`/submit`, `/approve`, `/reject`, `/reopen`, `/issue`, `/cancel`, `/close`, `/pdf`, `/counts`) | órdenes de compra |
 | GET | `/purchasing/approvals/inbox`, `/approvals/history` | bandeja de aprobaciones |
 | POST/DELETE | `/attachments` | adjuntos (fotos, PDF) sobre documentos |
+| GET | `/inventory/stock`, `/inventory/stock/summary`, `/inventory/kardex` | saldos por bodega (matriz), totales y kardex |
+| CRUD + acciones | `/inventory/goods-receipts` (`/confirm`, `/cancel`, `/receivable-orders`, `/counts`) | recepciones de compra contra OC (parciales) |
+| CRUD + acciones | `/inventory/supplier-returns` (`/confirm`, `/cancel`, `/reasons`) | devoluciones a proveedor |
+| CRUD + acciones | `/inventory/adjustments` (`/confirm`, `/cancel`, `/reasons`) | ajustes de inventario |
+| CRUD + acciones | `/inventory/stock-counts` (`/products`, `/record`, `/close`, `/cancel`) | conteos físicos que generan ajustes |
 
 Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.create`, …) y se verifican con el middleware `permission:`.
 
@@ -103,7 +108,7 @@ Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.cre
 |---|---|---|
 | 0 | Base: login, roles, layout, maestros, usuarios, configuración | ✅ |
 | 1 | Compras: solicitudes con aprobación, cotizaciones, comparativa, OC con PDF | ✅ |
-| 2 | Inventario municipio: recepciones, kardex, stock, devoluciones, ajustes | pendiente |
+| 2 | Inventario: recepciones parciales, kardex con costo promedio, stock valorizado, devoluciones, ajustes, conteos | ✅ |
 | 3 | Cuentas por pagar | pendiente |
 | 4 | Logística: planillas, recepción en mina, novedades | pendiente |
 | 5 | Consumo en mina: vales, préstamos | pendiente |

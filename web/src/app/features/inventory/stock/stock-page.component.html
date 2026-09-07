@@ -1,0 +1,273 @@
+<app-page-header title="Stock" subtitle="Existencias valorizadas por bodega" [crumbs]="[{ label: 'Inventario' }, { label: 'Stock' }]">
+  <span pTooltip="Próximamente" tooltipPosition="bottom">
+    <p-button label="Exportar" icon="pi pi-download" severity="secondary" [outlined]="true" [disabled]="true" />
+  </span>
+  @if (canAdjust()) {
+    <p-button label="Nuevo ajuste" icon="pi pi-plus" (onClick)="goAdjustment()" />
+  }
+</app-page-header>
+
+<!-- ================= KPIs ================= -->
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+  @for (k of kpis(); track k.label) {
+    <div class="card p-5 flex flex-col justify-between" [class.border-red-200]="k.alert">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <span class="th-label block truncate">{{ k.label }}</span>
+          <span class="text-[28px] leading-9 font-bold tabular mt-1 block" [class.text-ink]="!k.alert" [class.text-red-700]="k.alert">{{ k.value }}</span>
+        </div>
+        <div class="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" [class]="k.tone">
+          <span class="material-symbols-outlined !text-[24px]">{{ k.icon }}</span>
+        </div>
+      </div>
+      <div class="mt-4 -mx-5 -mb-5 px-5 py-2.5 bg-canvas/70 text-xs truncate" [class.text-ink-3]="!k.alert" [class.text-red-700]="k.alert">{{ k.note }}</div>
+    </div>
+  }
+</div>
+
+<!-- ================= Filtros ================= -->
+<div class="card px-4 py-3 mb-4 flex flex-wrap items-center gap-3">
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Todas las bodegas"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event ?? null)"
+    styleClass="w-52"
+  />
+  <p-select
+    [options]="categories()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Categoría"
+    [showClear]="true"
+    [filter]="categories().length > 8"
+    filterPlaceholder="Buscar categoría…"
+    [ngModel]="categoryId()"
+    (ngModelChange)="setCategory($event)"
+    styleClass="w-52"
+  />
+  <p-select
+    [options]="kindOptions"
+    optionLabel="label"
+    optionValue="value"
+    placeholder="Todos los tipos"
+    [showClear]="true"
+    [ngModel]="kind()"
+    (ngModelChange)="setKind($event ?? null)"
+    styleClass="w-44"
+  />
+  <div class="relative flex-1 min-w-[220px] max-w-md">
+    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none !text-[18px]">search</span>
+    <input pInputText type="text" class="w-full !pl-9" placeholder="Buscar por SKU o nombre…" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+  </div>
+  <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer select-none">
+    <p-toggleswitch [ngModel]="belowMin()" (ngModelChange)="setBelowMin($event)" />
+    <span [class.font-semibold]="belowMin()" [class.text-red-700]="belowMin()">Solo bajo mínimo</span>
+  </label>
+  @if (hasFilters()) {
+    <p-button label="Limpiar" icon="pi pi-filter-slash" [text]="true" severity="secondary" size="small" (onClick)="clearFilters()" />
+  }
+</div>
+
+<!-- ================= Matriz de stock ================= -->
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="!belowMin()"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    [scrollable]="true"
+    [tableStyle]="{ 'min-width': (900 + warehouses().length * 120) + 'px' }"
+    dataKey="product.id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pFrozenColumn class="min-w-[260px]">Producto</th>
+        <th class="w-24">Unidad</th>
+        @for (w of warehouses(); track w.id) {
+          <th class="w-28 text-right !normal-case !tracking-normal">
+            <span class="cursor-help" [pTooltip]="w.name + (w.site ? ' · ' + w.site : '')" tooltipPosition="top">{{ w.code }}</span>
+          </th>
+        }
+        <th class="w-28 text-right text-orange-700">En tránsito</th>
+        <th class="w-28 text-right text-blue-700">En préstamo</th>
+        <th class="w-28 text-right">Total</th>
+        <th class="w-32 text-right">Costo prom.</th>
+        <th class="w-36 text-right">Valor</th>
+        <th class="w-16"></th>
+      </tr>
+    </ng-template>
+
+    <ng-template #body let-row>
+      <tr [class.bg-red-50/30]="row.below_min">
+        <td pFrozenColumn [class.shadow-[inset_3px_0_0_#EF4444]]="row.below_min">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-ink truncate">{{ row.product.name }}</div>
+              <div class="text-xs text-ink-3 truncate">
+                <span class="tabular">{{ row.product.sku }}</span>
+                @if (row.product.category) { · {{ row.product.category }} }
+                @if (row.product.kind === 'retornable') { · <span class="chip chip-info !h-4 !px-1 !text-[10px]">Retornable</span> }
+              </div>
+            </div>
+          </div>
+        </td>
+        <td class="text-ink-2 tabular text-sm">{{ row.product.base_unit }}</td>
+        @for (w of warehouses(); track w.id) {
+          @let cell = cellFor(row, w.id);
+          <td class="text-right !p-0">
+            <button
+              type="button"
+              class="w-full h-full px-4 py-2.5 text-right tabular text-sm hover:bg-amber-50/60 focus:outline-none focus-visible:bg-amber-50 transition-colors flex items-center justify-end gap-1.5"
+              [pTooltip]="'Kardex · ' + w.code"
+              tooltipPosition="top"
+              (click)="openKardex(row, w, cell)"
+            >
+              @if (cell?.below_min) {
+                <span
+                  class="inline-block w-2 h-2 rounded-full bg-red-500 shrink-0"
+                  [pTooltip]="'Mínimo: ' + fmt(cell?.min_stock)"
+                  tooltipPosition="top"
+                ></span>
+              }
+              @if (cell && cell.qty > 0) {
+                <span class="text-ink" [class.font-semibold]="cell.below_min" [class.text-red-700]="cell.below_min">{{ cell.qty | number: '1.0-3' }}</span>
+              } @else {
+                <span class="text-ink-3">—</span>
+              }
+            </button>
+          </td>
+        }
+        <td class="text-right tabular text-sm" [class.text-orange-700]="row.in_transit > 0" [class.text-ink-3]="!row.in_transit">
+          {{ row.in_transit > 0 ? (row.in_transit | number: '1.0-3') : '—' }}
+        </td>
+        <td class="text-right tabular text-sm" [class.text-blue-700]="row.on_loan > 0" [class.text-ink-3]="!row.on_loan">
+          {{ row.on_loan > 0 ? (row.on_loan | number: '1.0-3') : '—' }}
+        </td>
+        <td class="text-right tabular text-sm font-bold text-ink">{{ row.total_qty | number: '1.0-3' }}</td>
+        <td class="text-right tabular text-sm text-ink-2">{{ row.avg_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td class="text-right tabular text-sm font-bold text-ink">{{ row.total_value | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td class="text-right whitespace-nowrap !py-1">
+          <p-button icon="pi pi-list" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver kardex" tooltipPosition="left" (onClick)="openRowKardex(row)" />
+        </td>
+      </tr>
+    </ng-template>
+
+    <ng-template #emptymessage>
+      <tr>
+        <td [attr.colspan]="colCount()" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">layers_clear</span>
+            @if (isPristineEmpty()) {
+              <span class="text-sm">Aún no hay existencias. Registra una recepción o un ajuste de inventario inicial.</span>
+              @if (canAdjust()) {
+                <p-button label="Registrar ajuste inicial" icon="pi pi-plus" [text]="true" size="small" (onClick)="goAdjustment()" />
+              }
+            } @else if (belowMin() && !search() && categoryId() === null && kind() === null) {
+              <span class="text-sm">Ningún producto está bajo el stock mínimo.</span>
+            } @else {
+              <span class="text-sm">No hay productos que coincidan con los filtros.</span>
+              <p-button label="Limpiar filtros" icon="pi pi-filter-slash" [text]="true" size="small" (onClick)="clearFilters()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<!-- ================= Panel lateral: kardex resumido ================= -->
+<p-drawer
+  [visible]="drawerOpen()"
+  (visibleChange)="drawerOpen.set($event)"
+  position="right"
+  styleClass="!w-[560px] max-w-full"
+  [blockScroll]="true"
+>
+  <ng-template #header>
+    <div class="min-w-0">
+      <div class="text-xs text-ink-3 uppercase tracking-[0.05em] font-semibold">Kardex</div>
+      <div class="text-base font-semibold text-ink truncate">{{ drawerProduct()?.name ?? '—' }} · {{ drawerWarehouse()?.name ?? '—' }}</div>
+      <div class="text-xs text-ink-3 tabular">{{ drawerProduct()?.sku }} · {{ drawerWarehouse()?.code }}</div>
+    </div>
+  </ng-template>
+
+  @if (drawerCell(); as c) {
+    <div class="grid grid-cols-3 divide-x divide-line border-b border-line bg-canvas/60">
+      <div class="px-4 py-3">
+        <div class="th-label">Saldo</div>
+        <div class="text-lg font-bold tabular" [class.text-red-700]="c.below_min" [class.text-ink]="!c.below_min">
+          {{ c.qty | number: '1.0-3' }} <span class="text-xs font-medium text-ink-3">{{ drawerProduct()?.base_unit }}</span>
+        </div>
+        @if (c.below_min) {
+          <div class="text-[11px] text-red-700">Mínimo: {{ fmt(c.min_stock) }}</div>
+        }
+      </div>
+      <div class="px-4 py-3">
+        <div class="th-label">Costo prom.</div>
+        <div class="text-lg font-bold tabular text-ink">{{ c.avg_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+      </div>
+      <div class="px-4 py-3">
+        <div class="th-label">Valor</div>
+        <div class="text-lg font-bold tabular text-ink">{{ c.value | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+      </div>
+    </div>
+  }
+
+  <div class="px-5 pt-4 pb-2 flex items-center justify-between">
+    <span class="text-sm font-semibold text-ink">Últimos movimientos</span>
+    <span class="text-xs text-ink-3">{{ drawerRows().length }} de máx. 20</span>
+  </div>
+
+  @if (drawerLoading()) {
+    <div class="px-5 py-8 text-sm text-ink-3 text-center"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando movimientos…</div>
+  } @else if (drawerRows().length) {
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-[#F8FAFC] border-y border-[#CBD5E1]">
+          <th class="th-label text-left px-5 py-2">Fecha</th>
+          <th class="th-label text-left px-3 py-2">Tipo</th>
+          <th class="th-label text-right px-3 py-2">Entrada / Salida</th>
+          <th class="th-label text-right px-5 py-2">Saldo</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-line">
+        @for (m of drawerRows(); track m.id) {
+          <tr class="hover:bg-canvas/60">
+            <td class="px-5 py-2.5 tabular text-ink-2 whitespace-nowrap">{{ m.moved_at | date: 'dd/MM/yy HH:mm' }}</td>
+            <td class="px-3 py-2.5">
+              <div class="text-ink">{{ m.type_label }}</div>
+              <div class="text-xs text-ink-3 tabular">
+                {{ m.source?.number ?? '—' }}
+                @if (m.is_reversal) { <span class="chip chip-danger !h-4 !px-1 !text-[10px] ml-1">Reversa</span> }
+              </div>
+            </td>
+            <td class="px-3 py-2.5 text-right tabular font-semibold" [class.text-emerald-700]="m.is_inbound" [class.text-red-700]="!m.is_inbound">
+              {{ m.is_inbound ? '+' : '−' }}{{ abs(m.qty_base) | number: '1.0-3' }}
+            </td>
+            <td class="px-5 py-2.5 text-right tabular text-ink font-medium">{{ m.balance_qty_after | number: '1.0-3' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    <div class="px-5 py-8 text-sm text-ink-3 text-center">Sin movimientos registrados para este producto en esta bodega.</div>
+  }
+
+  <ng-template #footer>
+    <div class="flex items-center justify-between w-full">
+      <p-button label="Cerrar" severity="secondary" [outlined]="true" size="small" (onClick)="closeKardex()" />
+      <p-button label="Ver kardex completo" icon="pi pi-arrow-right" iconPos="right" [text]="true" size="small" (onClick)="goFullKardex()" />
+    </div>
+  </ng-template>
+</p-drawer>

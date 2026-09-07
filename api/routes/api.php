@@ -17,6 +17,11 @@ use App\Http\Controllers\Api\Catalog\VehicleController;
 use App\Http\Controllers\Api\Catalog\WarehouseController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\HealthController;
+use App\Http\Controllers\Api\Inventory\AdjustmentController;
+use App\Http\Controllers\Api\Inventory\GoodsReceiptController;
+use App\Http\Controllers\Api\Inventory\StockController;
+use App\Http\Controllers\Api\Inventory\StockCountController;
+use App\Http\Controllers\Api\Inventory\SupplierReturnController;
 use App\Http\Controllers\Api\Purchasing\ApprovalController;
 use App\Http\Controllers\Api\Purchasing\ComparisonController;
 use App\Http\Controllers\Api\Purchasing\PurchaseOrderController;
@@ -118,6 +123,54 @@ Route::middleware('auth:sanctum')->group(function () {
         // Bandeja de aprobaciones
         Route::get('approvals/inbox', [ApprovalController::class, 'inbox'])->middleware('permission:approvals.view');
         Route::get('approvals/history', [ApprovalController::class, 'history'])->middleware('permission:approvals.view');
+    });
+
+    // Inventario
+    Route::prefix('inventory')->name('inventory.')->group(function () {
+        // Stock y kardex
+        Route::get('stock', [StockController::class, 'matrix'])->middleware('permission:stock.view');
+        Route::get('stock/summary', [StockController::class, 'summary'])->middleware('permission:stock.view');
+        Route::get('stock/movement-types', [StockController::class, 'movementTypes'])->middleware('permission:stock.view');
+        Route::get('stock/products/{productId}/balances', [StockController::class, 'productBalances'])->middleware('permission:stock.view');
+        Route::get('kardex', [StockController::class, 'kardex'])->middleware('permission:stock.view');
+
+        // Recepciones de compra
+        Route::get('goods-receipts', [GoodsReceiptController::class, 'index'])->middleware('permission:goods_receipts.view');
+        Route::get('goods-receipts/counts', [GoodsReceiptController::class, 'counts'])->middleware('permission:goods_receipts.view');
+        Route::get('goods-receipts/receivable-orders', [GoodsReceiptController::class, 'receivableOrders'])->middleware('permission:goods_receipts.view');
+        Route::get('goods-receipts/{id}', [GoodsReceiptController::class, 'show'])->middleware('permission:goods_receipts.view');
+        Route::post('goods-receipts', [GoodsReceiptController::class, 'store'])->middleware('permission:goods_receipts.create');
+        Route::put('goods-receipts/{id}', [GoodsReceiptController::class, 'update'])->middleware('permission:goods_receipts.update');
+        Route::post('goods-receipts/{id}/confirm', [GoodsReceiptController::class, 'confirm'])->middleware('permission:goods_receipts.update');
+        Route::post('goods-receipts/{id}/cancel', [GoodsReceiptController::class, 'cancel'])->middleware('permission:goods_receipts.delete');
+
+        // Devoluciones a proveedor
+        Route::get('supplier-returns', [SupplierReturnController::class, 'index'])->middleware('permission:supplier_returns.view');
+        Route::get('supplier-returns/reasons', [SupplierReturnController::class, 'reasons'])->middleware('permission:supplier_returns.view');
+        Route::get('supplier-returns/{id}', [SupplierReturnController::class, 'show'])->middleware('permission:supplier_returns.view');
+        Route::post('supplier-returns', [SupplierReturnController::class, 'store'])->middleware('permission:supplier_returns.create');
+        Route::put('supplier-returns/{id}', [SupplierReturnController::class, 'update'])->middleware('permission:supplier_returns.update');
+        Route::post('supplier-returns/{id}/confirm', [SupplierReturnController::class, 'confirm'])->middleware('permission:supplier_returns.update');
+        Route::post('supplier-returns/{id}/cancel', [SupplierReturnController::class, 'cancel'])->middleware('permission:supplier_returns.delete');
+
+        // Ajustes
+        Route::get('adjustments', [AdjustmentController::class, 'index'])->middleware('permission:adjustments.view');
+        Route::get('adjustments/reasons', [AdjustmentController::class, 'reasons'])->middleware('permission:adjustments.view');
+        Route::get('adjustments/{id}', [AdjustmentController::class, 'show'])->middleware('permission:adjustments.view');
+        Route::post('adjustments', [AdjustmentController::class, 'store'])->middleware('permission:adjustments.create');
+        Route::put('adjustments/{id}', [AdjustmentController::class, 'update'])->middleware('permission:adjustments.update');
+        Route::post('adjustments/{id}/confirm', [AdjustmentController::class, 'confirm'])->middleware('permission:adjustments.update');
+        Route::post('adjustments/{id}/cancel', [AdjustmentController::class, 'cancel'])->middleware('permission:adjustments.delete');
+
+        // Conteos físicos
+        Route::get('stock-counts', [StockCountController::class, 'index'])->middleware('permission:stock_counts.view');
+        Route::get('stock-counts/{id}', [StockCountController::class, 'show'])->middleware('permission:stock_counts.view');
+        Route::post('stock-counts', [StockCountController::class, 'store'])->middleware('permission:stock_counts.create');
+        Route::post('stock-counts/{id}/products', [StockCountController::class, 'addProducts'])->middleware('permission:stock_counts.update');
+        Route::delete('stock-counts/{id}/products/{productId}', [StockCountController::class, 'removeProduct'])->middleware('permission:stock_counts.update');
+        Route::put('stock-counts/{id}/record', [StockCountController::class, 'record'])->middleware('permission:stock_counts.update');
+        Route::post('stock-counts/{id}/close', [StockCountController::class, 'close'])->middleware('permission:stock_counts.update');
+        Route::post('stock-counts/{id}/cancel', [StockCountController::class, 'cancel'])->middleware('permission:stock_counts.delete');
     });
 
     // Adjuntos

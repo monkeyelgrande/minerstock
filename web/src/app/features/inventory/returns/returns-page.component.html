@@ -1,0 +1,155 @@
+<app-page-header
+  title="Devoluciones a proveedor"
+  subtitle="Salida de mercancía recibida que se devuelve al proveedor"
+  [crumbs]="[{ label: 'Inventario' }, { label: 'Devoluciones a proveedor' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Nueva devolución" icon="pi pi-plus" (onClick)="goCreate()" />
+  }
+</app-page-header>
+
+<!-- Pestañas por estado -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+    </button>
+  }
+</div>
+
+<app-crud-toolbar
+  [(search)]="search"
+  searchPlaceholder="Buscar por número, recepción o proveedor…"
+  [showActiveFilter]="false"
+  [createLabel]="null"
+>
+  <p-select
+    [options]="suppliers()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Proveedor"
+    [showClear]="true"
+    [filter]="suppliers().length > 8"
+    filterPlaceholder="Buscar proveedor…"
+    [ngModel]="supplierId()"
+    (ngModelChange)="setSupplier($event)"
+    styleClass="w-56"
+  />
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Bodega"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event)"
+    styleClass="w-48"
+  />
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="created_at"
+    [sortOrder]="-1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="number" class="w-32">Número <p-sortIcon field="number" /></th>
+        <th class="w-32">Recepción</th>
+        <th>Proveedor</th>
+        <th>Bodega</th>
+        <th pSortableColumn="date" class="w-28">Fecha <p-sortIcon field="date" /></th>
+        <th class="w-40">Motivo</th>
+        <th class="w-20 text-right">Ítems</th>
+        <th pSortableColumn="total_cost" class="w-36 text-right">Valor <p-sortIcon field="total_cost" /></th>
+        <th pSortableColumn="status" class="w-36">Estado <p-sortIcon field="status" /></th>
+        <th class="w-32 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/inventario/devoluciones', row.id]">{{ row.number }}</a>
+        </td>
+        <td>
+          @if (row.receipt) {
+            <a class="doc-link" [routerLink]="['/inventario/recepciones', row.receipt.id]">{{ row.receipt.number }}</a>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td>
+          <div class="text-ink font-medium">{{ row.supplier?.name ?? '—' }}</div>
+          @if (row.supplier?.document_number) {
+            <div class="text-xs text-ink-3 tabular">NIT {{ row.supplier.document_number }}</div>
+          }
+        </td>
+        <td>
+          <div class="text-ink">{{ row.warehouse?.name ?? '—' }}</div>
+          @if (row.warehouse?.code) {
+            <div class="text-xs text-ink-3 tabular">{{ row.warehouse.code }}</div>
+          }
+        </td>
+        <td class="tabular text-ink-2">{{ row.date | date: 'dd/MM/yyyy' }}</td>
+        <td class="text-ink-2">{{ row.reason_label }}</td>
+        <td class="tabular text-right text-ink-2">{{ row.items_count ?? '—' }}</td>
+        <td class="tabular text-right font-medium text-ink">{{ row.total_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td><app-chip [tone]="docTone(row.status)" [label]="row.status_label" /></td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver detalle" (onClick)="goDetail(row)" />
+          @if (row.is_editable && canUpdate()) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="goEdit(row)" />
+          }
+          @if (row.status === 'borrador' && canUpdate()) {
+            <p-button
+              icon="pi pi-check-circle"
+              [text]="true"
+              [rounded]="true"
+              severity="success"
+              size="small"
+              pTooltip="Confirmar (descuenta del stock)"
+              [loading]="confirming() === row.id"
+              [disabled]="confirming() !== null"
+              (onClick)="confirmReturn(row)"
+            />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="10" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">assignment_return</span>
+            <span class="text-sm">No hay devoluciones que coincidan con los filtros.</span>
+            @if (canCreate() && tab() === 'all' && !search()) {
+              <p-button label="Registrar la primera devolución" icon="pi pi-plus" [text]="true" size="small" (onClick)="goCreate()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

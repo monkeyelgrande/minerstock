@@ -55,6 +55,11 @@ class PurchaseOrder extends Model
         return $this->belongsTo(Warehouse::class);
     }
 
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(GoodsReceipt::class)->orderByDesc('id');
+    }
+
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');

@@ -3,15 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\GoodsReceipt;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\Quotation;
+use App\Models\StockCount;
+use App\Services\Inventory\StockQueryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /** Resumen para el dashboard. Cada bloque se incluye solo si el usuario tiene permiso de verlo. */
 class DashboardController extends Controller
 {
+    public function __construct(private readonly StockQueryService $stock) {}
+
     public function __invoke(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -66,6 +71,15 @@ class DashboardController extends Controller
             $data['approvals_pending'] = [
                 'purchase_requests' => PurchaseRequest::query()->where('status', 'enviada')->count(),
                 'purchase_orders' => PurchaseOrder::query()->where('status', 'pendiente_aprobacion')->count(),
+            ];
+        }
+
+        if ($user->can('stock.view')) {
+            $whIds = $this->stock->warehousesFor($user)->pluck('id')->all();
+            $totals = $this->stock->totals($whIds);
+            $data['stock'] = $totals + [
+                'receipts_draft' => $user->can('goods_receipts.view') ? GoodsReceipt::query()->visibleTo($user)->where('status', 'borrador')->count() : 0,
+                'counts_open' => $user->can('stock_counts.view') ? StockCount::query()->visibleTo($user)->where('status', 'en_proceso')->count() : 0,
             ];
         }
 

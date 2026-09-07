@@ -95,6 +95,10 @@ export class OrderDetailComponent {
 
   readonly isTerminalFailure = computed(() => this.status() === 'anulada' || this.status() === 'rechazada');
 
+  /** Recepción de mercancía (fase 2): la orden admite recepción y el usuario puede crearla. */
+  readonly showReceive = computed(() => !!this.order()?.can_receive && this.auth.can('goods_receipts.create'));
+  readonly receipts = computed(() => this.order()?.receipts ?? []);
+
   /** Pasos del stepper con su estado (hecho / actual / pendiente). */
   readonly steps = computed<Step[]>(() => {
     const o = this.order();
@@ -192,6 +196,11 @@ export class OrderDetailComponent {
   goEdit(): void {
     const o = this.order();
     if (o) void this.router.navigate(['/compras/ordenes', o.id, 'editar']);
+  }
+
+  goReceive(): void {
+    const o = this.order();
+    if (o) void this.router.navigate(['/inventario/recepciones/nueva'], { queryParams: { order: o.id } });
   }
 
   submit(): void {
@@ -329,4 +338,9 @@ export class OrderDetailComponent {
   }
 
   statusTone = statusTone;
+
+  /** Tono del chip de una recepción (borrador / confirmado / anulado). */
+  receiptTone(status: string): 'draft' | 'success' | 'danger' {
+    return status === 'confirmado' ? 'success' : status === 'anulado' ? 'danger' : 'draft';
+  }
 }

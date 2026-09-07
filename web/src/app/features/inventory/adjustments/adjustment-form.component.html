@@ -1,0 +1,231 @@
+<app-page-header
+  [title]="title()"
+  [subtitle]="isEdit() ? (adjustment()?.warehouse?.name ?? '') : 'Registra entradas o salidas manuales de stock en unidad base'"
+  [crumbs]="[{ label: 'Inventario' }, { label: 'Ajustes de inventario', route: '/inventario/ajustes' }, { label: isEdit() ? (adjustment()?.number ?? '…') : 'Nuevo' }]"
+>
+  @if (isEdit() && adjustment(); as a) {
+    <app-chip chip [tone]="statusTone(a.status)" [label]="a.status_label" />
+  }
+  <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancel()" />
+  <p-button label="Guardar borrador" icon="pi pi-save" severity="secondary" [loading]="saving()" [disabled]="loading()" (onClick)="save(false)" />
+  <p-button label="Guardar y confirmar" icon="pi pi-check" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+</app-page-header>
+
+<form [formGroup]="form" (ngSubmit)="save(false)" novalidate class="space-y-4">
+  <!-- ================= Datos ================= -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Datos</span>
+      @if (loading()) {
+        <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</span>
+      }
+    </div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <app-field label="Bodega" [required]="true" [control]="form.controls.warehouse_id" [serverError]="err('warehouse_id')" [submitted]="submitted()">
+        <p-select
+          formControlName="warehouse_id"
+          [options]="ctx.options()"
+          optionLabel="name"
+          optionValue="id"
+          placeholder="Selecciona bodega"
+          appendTo="body"
+          styleClass="w-full"
+          (onChange)="onWarehouseChange()"
+        >
+          <ng-template #item let-w>
+            <span class="tabular text-ink-3 mr-2">{{ w.code }}</span>{{ w.name }}
+          </ng-template>
+        </p-select>
+      </app-field>
+      <app-field label="Fecha" [required]="true" [control]="form.controls.date" [serverError]="err('date')" [submitted]="submitted()">
+        <p-datepicker formControlName="date" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full" />
+      </app-field>
+      <app-field label="Motivo" [required]="true" [control]="form.controls.reason" [serverError]="err('reason')" [submitted]="submitted()">
+        <p-select formControlName="reason" [options]="reasons()" optionLabel="label" optionValue="value" placeholder="Selecciona motivo" appendTo="body" styleClass="w-full" />
+      </app-field>
+      <div class="hidden xl:block"></div>
+      <div class="md:col-span-2 xl:col-span-4">
+        <app-field label="Observaciones" [serverError]="err('notes')">
+          <textarea pTextarea formControlName="notes" rows="2" class="w-full" placeholder="Causa del ajuste, referencia del acta, etc."></textarea>
+        </app-field>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Ítems ================= -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Ítems</div>
+        <p class="text-xs text-ink-3 mt-0.5">Las cantidades van en la unidad base del producto. Las salidas se valoran al costo promedio actual.</p>
+      </div>
+      <p-button label="Agregar ítem" icon="pi pi-plus" severity="secondary" [outlined]="true" size="small" (onClick)="addItem()" />
+    </div>
+
+    @if (!itemsArray.length) {
+      <div class="card-body text-center py-10">
+        <div class="flex flex-col items-center gap-2 text-ink-3">
+          <span class="material-symbols-outlined !text-[36px]">tune</span>
+          <span class="text-sm">El ajuste aún no tiene ítems.</span>
+          @if (submitted()) {
+            <span class="field-error">Agrega al menos un ítem.</span>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="overflow-x-auto" formArrayName="items">
+        <table class="w-full min-w-[1180px]">
+          <thead>
+            <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+              <th class="th-label text-left px-5 py-2.5 min-w-[240px]">Producto</th>
+              <th class="th-label text-right px-3 py-2.5 w-32">Stock actual</th>
+              <th class="th-label text-left px-3 py-2.5 w-44">Tipo</th>
+              <th class="th-label text-right px-3 py-2.5 w-36">Cantidad</th>
+              <th class="th-label text-right px-3 py-2.5 w-44">Costo unitario</th>
+              <th class="th-label text-right px-3 py-2.5 w-32">Stock resultante</th>
+              <th class="th-label text-left px-3 py-2.5 min-w-[160px]">Observación</th>
+              <th class="w-12"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of itemsArray.controls; track g; let i = $index) {
+              @let info = rowInfo()[i];
+              <tr [formGroupName]="i" class="border-b border-line last:border-b-0 align-top">
+                <td class="px-5 py-3">
+                  <app-product-picker formControlName="product" />
+                  @if (g.getRawValue().product; as p) {
+                    <div class="text-xs text-ink-3 tabular mt-1">{{ p.sku }} · base {{ p.base_unit?.code }}</div>
+                  }
+                  @if (err('items.' + i + '.product_id'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (showError(g, 'product')) {
+                    <p class="field-error">Selecciona un producto.</p>
+                  }
+                </td>
+                <td class="px-3 py-3 text-right tabular pt-[1.15rem]">
+                  @if (g.getRawValue().product) {
+                    <div class="text-sm font-medium text-ink">{{ info.current | number: '1.0-3' }} <span class="text-xs text-ink-3 font-normal">{{ info.unit }}</span></div>
+                    <div class="text-[11px] text-ink-3" [pTooltip]="info.loaded ? 'Costo promedio actual' : undefined" tooltipPosition="top">
+                      @if (info.loaded) {
+                        prom. {{ info.avgCost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+                      } @else {
+                        <i class="pi pi-spin pi-spinner"></i>
+                      }
+                    </div>
+                  } @else {
+                    <span class="text-ink-3 text-sm">—</span>
+                  }
+                </td>
+                <td class="px-3 py-3">
+                  <p-selectbutton formControlName="type" [options]="typeOptions" optionLabel="label" optionValue="value" [allowEmpty]="false" size="small">
+                    <ng-template #item let-opt>
+                      <span class="flex items-center gap-1.5"><i [class]="opt.icon + ' !text-[11px]'"></i>{{ opt.label }}</span>
+                    </ng-template>
+                  </p-selectbutton>
+                </td>
+                <td class="px-3 py-3">
+                  <p-inputnumber
+                    formControlName="quantity"
+                    mode="decimal"
+                    [min]="0"
+                    [minFractionDigits]="0"
+                    [maxFractionDigits]="3"
+                    locale="es-CO"
+                    placeholder="0"
+                    [suffix]="info.unit ? ' ' + info.unit : ''"
+                    styleClass="w-full"
+                    inputStyleClass="w-full tabular text-right"
+                  />
+                  @if (err('items.' + i + '.qty_base'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (showError(g, 'quantity')) {
+                    <p class="field-error">Ingresa una cantidad mayor que 0.</p>
+                  }
+                </td>
+                <td class="px-3 py-3">
+                  @if (g.getRawValue().type === 'entrada') {
+                    <p-inputnumber
+                      formControlName="unit_cost"
+                      mode="currency"
+                      currency="COP"
+                      currencyDisplay="narrowSymbol"
+                      locale="es-CO"
+                      [min]="0"
+                      [minFractionDigits]="0"
+                      [maxFractionDigits]="2"
+                      placeholder="Promedio actual"
+                      styleClass="w-full"
+                      inputStyleClass="w-full tabular text-right"
+                    />
+                    @if (err('items.' + i + '.unit_cost'); as e) {
+                      <p class="field-error">{{ e }}</p>
+                    } @else if (showError(g, 'unit_cost')) {
+                      <p class="field-error">El costo no puede ser negativo.</p>
+                    } @else if (g.getRawValue().unit_cost === null) {
+                      <p class="field-hint">Vacío = costo promedio actual</p>
+                    }
+                  } @else {
+                    <div class="text-right tabular pt-[0.45rem] text-sm text-ink-2" pTooltip="Las salidas se valoran al costo promedio actual" tooltipPosition="top">
+                      {{ info.avgCost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+                    </div>
+                    <p class="field-hint text-right">Promedio actual</p>
+                  }
+                </td>
+                <td class="px-3 py-3 text-right tabular pt-[1.15rem]">
+                  @if (g.getRawValue().product) {
+                    <span class="text-sm font-semibold" [class.text-ink]="!info.negative" [class.text-[#B91C1C]]="info.negative">
+                      {{ info.resulting | number: '1.0-3' }}
+                    </span>
+                    <span class="text-xs text-ink-3 ml-1">{{ info.unit }}</span>
+                    @if (info.negative) {
+                      <div class="text-[11px] text-[#B91C1C]">Stock insuficiente</div>
+                    }
+                  } @else {
+                    <span class="text-ink-3 text-sm">—</span>
+                  }
+                </td>
+                <td class="px-3 py-3">
+                  <input pInputText formControlName="notes" class="w-full" placeholder="Opcional" maxlength="255" />
+                  @if (err('items.' + i + '.notes'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  }
+                </td>
+                <td class="px-2 py-2 text-right">
+                  <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Quitar" (onClick)="removeItem(i)" />
+                </td>
+              </tr>
+              @for (msg of rowErrors(i, ['product_id', 'qty_base', 'unit_cost', 'notes']); track msg) {
+                <tr class="border-b border-line">
+                  <td colspan="8" class="px-5 pb-2 field-error">{{ msg }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-4 px-5 py-3 border-t border-line text-xs text-ink-3">
+        <span>{{ itemsArray.length }} ítem(s)</span>
+        <span class="inline-flex items-center gap-1 text-[#065F46]"><i class="pi pi-arrow-down !text-[10px]"></i>{{ summary().entries }} entrada(s)</span>
+        <span class="inline-flex items-center gap-1 text-[#B91C1C]"><i class="pi pi-arrow-up !text-[10px]"></i>{{ summary().exits }} salida(s)</span>
+        @if (summary().negatives > 0) {
+          <span class="inline-flex items-center gap-1 text-[#B91C1C] font-medium"><span class="material-symbols-outlined !text-[14px]">warning</span>{{ summary().negatives }} línea(s) con stock insuficiente</span>
+        }
+      </div>
+    }
+    @if (err('items'); as e) {
+      <p class="field-error px-5 py-3 border-t border-line">{{ e }}</p>
+    }
+  </div>
+
+  <!-- ================= Adjuntos (solo en edición) ================= -->
+  @if (adjustment(); as a) {
+    <app-attachments [type]="attachType" [documentId]="a.id" [items]="a.attachments ?? []" [canEdit]="true" (changed)="reloadAdjustment()" />
+  }
+
+  <div class="flex justify-end gap-2">
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" [disabled]="saving()" (onClick)="cancel()" />
+    <p-button label="Guardar borrador" icon="pi pi-save" severity="secondary" type="submit" [loading]="saving()" [disabled]="loading()" />
+    <p-button label="Guardar y confirmar" icon="pi pi-check" type="button" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+  </div>
+</form>

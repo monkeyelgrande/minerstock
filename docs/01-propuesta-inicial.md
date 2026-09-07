@@ -156,9 +156,9 @@ Los saldos por bodega/producto (cantidad y costo promedio) se mantienen en una t
 
 | Fase | Contenido | Resultado |
 |---|---|---|
-| **0. Base** | Limpieza del template, login, usuarios, roles, layout, configuración, maestros (sedes, bodegas, unidades, categorías, productos con conversiones, proveedores, vehículos, choferes, receptores, centros de costo). | Se entra al sistema y se cargan catálogos. |
-| **1. Compras** | Solicitudes con aprobación → cotizaciones + comparativa → OC con aprobación y PDF. | Ciclo de compra completo. |
-| **2. Inventario municipio** | Recepciones parciales, kardex, saldos valorizados, devoluciones a proveedor, ajustes, conteos. | Stock real y valorizado en el municipio. |
+| **0. Base** ✅ | Limpieza del template, login, usuarios, roles, layout, configuración, maestros (sedes, bodegas, unidades, categorías, productos con conversiones, proveedores, vehículos, choferes, receptores, centros de costo). | Se entra al sistema y se cargan catálogos. |
+| **1. Compras** ✅ | Solicitudes con aprobación → cotizaciones + comparativa → OC con aprobación y PDF. | Ciclo de compra completo. |
+| **2. Inventario** ✅ | Recepciones parciales, kardex, saldos valorizados, devoluciones a proveedor, ajustes, conteos. | Stock real y valorizado por bodega. |
 | **3. Cuentas por pagar** | Facturas ligadas a recepciones, pagos, notas crédito, estado de cuenta por proveedor. | Control de lo que se debe y se ha pagado. |
 | **4. Logística** | Planillas con vehículo y chofer, tránsito, recepción en mina con novedades, PDF de planilla. | Mercancía llega a la mina con control. |
 | **5. Consumo en mina** | Vales de salida, préstamos y devoluciones, alertas de stock mínimo. | Descarga de inventario y control de herramientas. |

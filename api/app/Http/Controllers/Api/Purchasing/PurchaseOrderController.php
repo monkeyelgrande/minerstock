@@ -19,7 +19,7 @@ class PurchaseOrderController extends Controller
     private const DETAIL = [
         'supplier', 'warehouse', 'approver', 'creator',
         'items.product.baseUnit', 'items.unit', 'items.requestItem.request',
-        'approvals.requester', 'approvals.decider', 'attachments.uploader',
+        'approvals.requester', 'approvals.decider', 'attachments.uploader', 'receipts',
     ];
 
     public function __construct(private readonly PurchaseOrderService $service) {}

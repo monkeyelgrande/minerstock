@@ -16,6 +16,9 @@ class Attachment extends Model
         'purchase_request' => PurchaseRequest::class,
         'quotation' => Quotation::class,
         'purchase_order' => PurchaseOrder::class,
+        'goods_receipt' => GoodsReceipt::class,
+        'supplier_return' => SupplierReturn::class,
+        'adjustment' => Adjustment::class,
     ];
 
     public function attachable(): MorphTo
