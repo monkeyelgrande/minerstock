@@ -1,0 +1,146 @@
+<app-page-header
+  title="Solicitudes de compra"
+  subtitle="Requerimientos de insumos y materiales por bodega"
+  [crumbs]="[{ label: 'Compras' }, { label: 'Solicitudes de compra' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Nueva solicitud" icon="pi pi-plus" (onClick)="goCreate()" />
+  }
+</app-page-header>
+
+<!-- Pestañas por estado -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="flex items-center gap-2 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+      <span
+        class="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-semibold tabular"
+        [class.bg-amber-100]="tab() === t.key"
+        [class.text-amber-800]="tab() === t.key"
+        [class.bg-slate-100]="tab() !== t.key"
+        [class.text-slate-600]="tab() !== t.key"
+      >{{ countFor(t) }}</span>
+    </button>
+  }
+</div>
+
+<app-crud-toolbar
+  [(search)]="search"
+  searchPlaceholder="Buscar por número, producto o SKU…"
+  [showActiveFilter]="false"
+  [createLabel]="null"
+>
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Bodega"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event)"
+    styleClass="w-52"
+  />
+  <p-select
+    [options]="priorityOptions"
+    optionLabel="label"
+    optionValue="value"
+    placeholder="Prioridad"
+    [showClear]="true"
+    [ngModel]="priority()"
+    (ngModelChange)="setPriority($event)"
+    styleClass="w-40"
+  />
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="created_at"
+    [sortOrder]="-1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="number" class="w-32">Número <p-sortIcon field="number" /></th>
+        <th pSortableColumn="created_at" class="w-28">Fecha <p-sortIcon field="created_at" /></th>
+        <th>Bodega</th>
+        <th>Solicitante</th>
+        <th pSortableColumn="priority" class="w-28">Prioridad <p-sortIcon field="priority" /></th>
+        <th class="w-20 text-right">Ítems</th>
+        <th class="w-40">Avance</th>
+        <th pSortableColumn="status" class="w-44">Estado <p-sortIcon field="status" /></th>
+        <th class="w-24 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/compras/solicitudes', row.id]">{{ row.number }}</a>
+        </td>
+        <td class="tabular text-ink-2">{{ row.created_at | date: 'dd/MM/yyyy' }}</td>
+        <td>
+          <div class="text-ink">{{ row.warehouse?.name ?? '—' }}</div>
+          @if (row.warehouse?.code) {
+            <div class="text-xs text-ink-3 tabular">{{ row.warehouse.code }}</div>
+          }
+        </td>
+        <td class="text-ink-2">{{ row.requester?.name ?? '—' }}</td>
+        <td><app-chip [tone]="priorityTone(row.priority)" [label]="priorityLabel(row.priority)" /></td>
+        <td class="tabular text-right">{{ row.items_count ?? '—' }}</td>
+        <td>
+          @if (row.progress; as p) {
+            <div class="flex items-center gap-2" [pTooltip]="'Ordenado ' + p.ordered + '% · Despachado ' + p.shipped + '%'" tooltipPosition="top">
+              <div class="relative flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                <div class="absolute inset-y-0 left-0 bg-blue-400 rounded-full" [style.width.%]="p.ordered"></div>
+                <div class="absolute inset-y-0 left-0 bg-emerald-500 rounded-full" [style.width.%]="p.shipped"></div>
+              </div>
+              <span class="text-[11px] tabular text-ink-3 w-8 text-right">{{ p.shipped }}%</span>
+            </div>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td><app-chip [tone]="statusTone(row.status)" [label]="row.status_label" /></td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver detalle" (onClick)="goDetail(row)" />
+          @if (row.is_editable && canUpdate()) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="goEdit(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="9" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">assignment</span>
+            <span class="text-sm">No hay solicitudes que coincidan con los filtros.</span>
+            @if (canCreate() && tab() === 'all' && !search()) {
+              <p-button label="Crear la primera solicitud" icon="pi pi-plus" [text]="true" size="small" (onClick)="goCreate()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

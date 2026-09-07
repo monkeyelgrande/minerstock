@@ -1,0 +1,233 @@
+<app-page-header
+  title="Comparativa de cotizaciones"
+  subtitle="Compara los precios por unidad base de cada proveedor, elige la mejor oferta por producto y genera las órdenes de compra"
+  [crumbs]="[{ label: 'Compras' }, { label: 'Comparativa de cotizaciones' }]"
+>
+  @if (canGenerate()) {
+    <p-button [label]="generateLabel()" icon="pi pi-shopping-cart" [disabled]="!selectedOffers().length || loading()" (onClick)="openGenerate()" />
+  }
+</app-page-header>
+
+<!-- ================= Filtros ================= -->
+<div class="card px-4 py-3 mb-4 flex flex-wrap items-center gap-3">
+  <p-multiselect
+    [options]="requestOptions()"
+    optionLabel="label"
+    optionValue="id"
+    display="chip"
+    placeholder="Solicitudes"
+    [filter]="requestOptions().length > 8"
+    filterPlaceholder="Buscar solicitud…"
+    [showToggleAll]="false"
+    [maxSelectedLabels]="3"
+    selectedItemsLabel="{0} solicitudes"
+    [ngModel]="requestIds()"
+    (ngModelChange)="setRequests($event)"
+    appendTo="body"
+    styleClass="w-72"
+  />
+  <div class="w-72">
+    <app-product-picker placeholder="Producto" [ngModel]="product()" (ngModelChange)="setProduct($event)" />
+  </div>
+  <p-select
+    [options]="suppliers()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Proveedor"
+    [showClear]="true"
+    [filter]="suppliers().length > 8"
+    filterPlaceholder="Buscar proveedor…"
+    [ngModel]="supplierId()"
+    (ngModelChange)="setSupplier($event)"
+    appendTo="body"
+    styleClass="w-56"
+  />
+  <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer select-none">
+    <p-toggleswitch [ngModel]="onlyValid()" (ngModelChange)="setOnlyValid($event)" inputId="cmp_only_valid" />
+    <span>Solo vigentes</span>
+  </label>
+  <div class="flex-1"></div>
+  @if (loading()) {
+    <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</span>
+  } @else {
+    <span class="text-xs text-ink-3 tabular">{{ grid().length }} producto(s) · {{ matrix().suppliers.length }} proveedor(es)</span>
+  }
+</div>
+
+<!-- ================= Matriz ================= -->
+<div class="card overflow-hidden">
+  @if (!loading() && !grid().length) {
+    <div class="card-body text-center py-14">
+      <div class="flex flex-col items-center gap-2 text-ink-3">
+        <span class="material-symbols-outlined !text-[40px]">compare_arrows</span>
+        <span class="text-sm">No hay cotizaciones recibidas para comparar.</span>
+        <span class="text-xs">Registra cotizaciones, márcalas como recibidas y aparecerán aquí por producto.</span>
+        <p-button label="Ir a cotizaciones" icon="pi pi-arrow-right" iconPos="right" [text]="true" size="small" routerLink="/compras/cotizaciones" />
+      </div>
+    </div>
+  } @else {
+    <div class="overflow-x-auto">
+      <table class="w-full border-collapse text-sm">
+        <thead>
+          <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+            <th class="th-label text-left px-5 py-3 min-w-[260px] sticky left-0 z-10 bg-[#F8FAFC] border-r border-line">Producto</th>
+            @for (s of matrix().suppliers; track s.id) {
+              <th class="th-label text-left px-4 py-3 min-w-[200px] border-r border-line">
+                <span class="normal-case text-[13px] font-semibold text-ink tracking-normal">{{ s.name }}</span>
+              </th>
+            }
+            <th class="th-label text-left px-4 py-3 min-w-[200px]">Seleccionado</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (g of grid(); track g.row.key) {
+            <tr class="border-b border-line align-top" [class.opacity-60]="isSaving(g.row)">
+              <!-- Producto -->
+              <td class="px-5 py-3 sticky left-0 z-10 bg-surface border-r border-line">
+                <div class="font-medium text-ink">{{ g.row.product.name }}</div>
+                <div class="text-xs text-ink-3 tabular">{{ g.row.product.sku }}</div>
+                @if (g.row.request; as r) {
+                  <div class="text-xs text-ink-2 mt-1 flex flex-wrap items-center gap-x-1.5">
+                    <a class="doc-link" [routerLink]="['/compras/solicitudes', r.id]">{{ r.number }}</a>
+                    <span class="tabular">· Requerido: {{ r.qty_base | number: '1.0-2' }} {{ g.row.product.base_unit }}</span>
+                    @if (r.pending_base !== r.qty_base) {
+                      <span class="tabular text-ink-3">(pendiente {{ r.pending_base | number: '1.0-2' }})</span>
+                    }
+                  </div>
+                } @else {
+                  <div class="text-xs text-ink-3 mt-1">Sin solicitud asociada</div>
+                }
+              </td>
+
+              <!-- Una celda por proveedor -->
+              @for (offer of g.cells; track $index) {
+                <td class="px-2 py-2 border-r border-line">
+                  @if (offer) {
+                    <label
+                      class="block rounded-lg px-3 py-2 cursor-pointer transition-colors border border-transparent hover:border-line"
+                      [class.bg-emerald-50]="offer.is_best"
+                      [class.ring-2]="offer.is_selected"
+                      [class.ring-brand]="offer.is_selected"
+                      [for]="'off_' + offer.quotation_item_id"
+                    >
+                      <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                          <div class="text-base font-semibold text-ink tabular leading-tight">
+                            {{ offer.unit_price | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+                            <span class="text-xs font-normal text-ink-3">/ {{ offer.unit }}</span>
+                          </div>
+                          @if (offer.factor !== 1) {
+                            <div class="text-[11px] text-ink-3 tabular">≈ {{ offer.base_price | currency: 'COP' : 'symbol-narrow' : '1.0-0' }} / {{ g.row.product.base_unit }}</div>
+                          }
+                        </div>
+                        <p-radiobutton
+                          [name]="'row_' + g.row.key"
+                          [value]="offer.quotation_item_id"
+                          [ngModel]="g.row.selected_quotation_item_id"
+                          [inputId]="'off_' + offer.quotation_item_id"
+                          (onClick)="select(g.row, offer)"
+                        />
+                      </div>
+                      <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-3 tabular">
+                        <span>{{ offer.quantity | number: '1.0-2' }} {{ offer.unit }}</span>
+                        <span>· IVA {{ offer.tax_rate | number: '1.0-2' }}%</span>
+                        <span>· {{ offer.delivery_days !== null ? offer.delivery_days + ' días' : 'plazo s/d' }}</span>
+                      </div>
+                      <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                        <a class="doc-link text-xs" [routerLink]="['/compras/cotizaciones', offer.quotation_id]" (click)="$event.stopPropagation()">{{ offer.quotation_number }}</a>
+                        @if (offer.is_best) {
+                          <span class="chip chip-success !h-5 !px-1.5 !text-[10px]">Mejor precio</span>
+                        }
+                        @if (offer.is_selected) {
+                          <span class="chip chip-partial !h-5 !px-1.5 !text-[10px]">Elegida</span>
+                        }
+                      </div>
+                    </label>
+                  } @else {
+                    <div class="px-3 py-4 text-center text-ink-3">—</div>
+                  }
+                </td>
+              }
+
+              <!-- Seleccionado -->
+              <td class="px-4 py-3">
+                @if (g.selected; as sel) {
+                  <div class="font-medium text-ink">{{ g.selectedSupplier?.name ?? 'Proveedor ' + sel.supplier_id }}</div>
+                  <div class="tabular text-ink-2">{{ sel.line_total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }} <span class="text-xs text-ink-3">sin IVA</span></div>
+                  <button type="button" class="text-xs text-ink-3 hover:text-red-600 underline-offset-2 hover:underline mt-1" [disabled]="isSaving(g.row)" (click)="clear(g.row)">
+                    Quitar selección
+                  </button>
+                } @else {
+                  <span class="text-ink-3">Sin seleccionar</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr class="border-t-2 border-[#CBD5E1] bg-[#F8FAFC]">
+            <td class="px-5 py-3 sticky left-0 z-10 bg-[#F8FAFC] border-r border-line">
+              <div class="font-semibold text-ink">Total seleccionado</div>
+              <div class="text-xs text-ink-3">Sin IVA · {{ selectedOffers().length }} de {{ grid().length }} producto(s)</div>
+            </td>
+            @for (t of supplierTotals(); track $index) {
+              <td class="px-4 py-3 border-r border-line tabular">
+                @if (t > 0) {
+                  <span class="font-semibold text-ink">{{ t | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</span>
+                } @else {
+                  <span class="text-ink-3">—</span>
+                }
+              </td>
+            }
+            <td class="px-4 py-3 tabular">
+              <div class="text-xs text-ink-3">Total general</div>
+              <div class="font-semibold text-ink text-base">{{ grandTotal() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  }
+</div>
+
+<!-- ================= Diálogo: generar órdenes ================= -->
+<p-dialog
+  [visible]="generateOpen()"
+  (visibleChange)="generateOpen.set($event)"
+  header="Generar órdenes de compra"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!generating()"
+  [closable]="!generating()"
+  [style]="{ width: '460px', maxWidth: '95vw' }"
+>
+  <div class="space-y-4">
+    <p class="text-sm text-ink-2">
+      Se creará <span class="font-semibold text-ink">{{ selectedSupplierCount() === 1 ? '1 orden de compra en borrador' : selectedSupplierCount() + ' órdenes de compra en borrador' }}</span>
+      (una por proveedor) con los <span class="font-semibold text-ink tabular">{{ selectedOffers().length }}</span> ítem(s) seleccionados.
+    </p>
+    <div>
+      <label class="field-label">Bodega de entrega <span class="text-red-500">*</span></label>
+      <p-select
+        [options]="ctx.options()"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Selecciona la bodega"
+        [ngModel]="warehouseId()"
+        (ngModelChange)="warehouseId.set($event)"
+        appendTo="body"
+        styleClass="w-full"
+      >
+        <ng-template #item let-w>
+          <span class="tabular text-ink-3 mr-2">{{ w.code }}</span>{{ w.name }}
+        </ng-template>
+      </p-select>
+      <p class="field-hint">Las órdenes quedarán en borrador para revisarlas antes de enviarlas a aprobación.</p>
+    </div>
+    <div class="flex justify-end gap-2 pt-2">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="generating()" (onClick)="generateOpen.set(false)" />
+      <p-button label="Generar" icon="pi pi-check" [disabled]="!warehouseId()" [loading]="generating()" (onClick)="generate()" />
+    </div>
+  </div>
+</p-dialog>

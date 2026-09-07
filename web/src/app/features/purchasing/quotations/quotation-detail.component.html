@@ -1,0 +1,211 @@
+<app-page-header
+  [title]="quotation()?.number ?? 'Cotización'"
+  [subtitle]="quotation()?.supplier?.name ?? ''"
+  [crumbs]="[{ label: 'Compras' }, { label: 'Cotizaciones', route: '/compras/cotizaciones' }, { label: quotation()?.number ?? '…' }]"
+>
+  @if (quotation(); as q) {
+    <ng-container chip>
+      <app-chip [tone]="statusTone(q.status)" [label]="q.status_label" />
+      @if (q.is_expired && q.status !== 'descartada') {
+        <span class="chip chip-danger">Vencida</span>
+      }
+    </ng-container>
+  }
+  @if (canRemove()) {
+    <p-button label="Eliminar" icon="pi pi-trash" severity="danger" [text]="true" [disabled]="acting()" (onClick)="remove()" />
+  }
+  @if (canDiscard()) {
+    <p-button label="Descartar" icon="pi pi-ban" severity="secondary" [outlined]="true" [disabled]="acting()" (onClick)="discard()" />
+  }
+  @if (canEdit()) {
+    <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [outlined]="true" [disabled]="acting()" (onClick)="goEdit()" />
+  }
+  @if (canReceive()) {
+    <p-button label="Marcar como recibida" icon="pi pi-check" [loading]="acting()" (onClick)="receive()" />
+  }
+  @if (canCompare()) {
+    <p-button label="Ir a comparativa" icon="pi pi-table" [disabled]="acting()" (onClick)="goComparison()" />
+  }
+</app-page-header>
+
+@if (loading() && !quotation()) {
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-2"></i>Cargando cotización…</div>
+} @else if (quotation(); as q) {
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="lg:col-span-2 space-y-4 min-w-0">
+      <!-- Datos -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos de la cotización</span></div>
+        <div class="card-body grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-4 text-sm">
+          <div class="xl:col-span-2">
+            <div class="th-label">Proveedor</div>
+            <div class="text-ink font-medium mt-0.5">{{ q.supplier?.name ?? '—' }}</div>
+            @if (q.supplier?.document_number) {
+              <div class="text-xs text-ink-3 tabular">NIT {{ q.supplier?.document_number }}</div>
+            }
+            @if (q.supplier?.payment_terms_days) {
+              <div class="text-xs text-ink-3">Plazo de pago habitual: {{ q.supplier?.payment_terms_days }} días</div>
+            }
+          </div>
+          <div>
+            <div class="th-label">Fecha</div>
+            <div class="text-ink tabular mt-0.5">{{ q.date | date: 'dd/MM/yyyy' }}</div>
+          </div>
+          <div>
+            <div class="th-label">Válida hasta</div>
+            <div class="mt-0.5 flex items-center gap-2">
+              @if (q.valid_until) {
+                <span class="text-ink tabular">{{ q.valid_until | date: 'dd/MM/yyyy' }}</span>
+                @if (q.is_expired) {
+                  <span class="chip chip-danger !h-5">Vencida</span>
+                }
+              } @else {
+                <span class="text-ink-3">Sin vencimiento</span>
+              }
+            </div>
+          </div>
+          <div class="sm:col-span-2 xl:col-span-4">
+            <div class="th-label">Observaciones</div>
+            <div class="mt-0.5 whitespace-pre-line" [class.text-ink-3]="!q.notes" [class.text-ink-2]="!!q.notes">{{ q.notes || 'Sin observaciones.' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ítems -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            Ítems
+            <span class="ml-1.5 chip chip-draft !h-5 !px-1.5">{{ items().length }}</span>
+          </div>
+          @if (selectedCount()) {
+            <span class="text-xs text-ink-3 tabular">{{ selectedCount() }} seleccionado(s) en comparativa</span>
+          }
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[960px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5">Producto</th>
+                <th class="th-label text-left px-3 py-2.5 w-28">Solicitud</th>
+                <th class="th-label text-left px-3 py-2.5 w-20">Unidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Cantidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Precio</th>
+                <th class="th-label text-right px-3 py-2.5 w-36">Precio / u. base</th>
+                <th class="th-label text-right px-3 py-2.5 w-16">IVA</th>
+                <th class="th-label text-right px-3 py-2.5 w-20">Plazo</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Subtotal</th>
+                <th class="th-label text-left px-3 py-2.5 w-32">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of items(); track it.id) {
+                <tr class="border-b border-line last:border-b-0 align-top">
+                  <td class="px-5 py-3">
+                    <div class="text-sm font-medium text-ink">{{ it.product?.name ?? '—' }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product?.sku }}</div>
+                    @if (it.notes) {
+                      <div class="text-xs text-ink-2 italic mt-0.5">{{ it.notes }}</div>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm">
+                    @if (it.request; as r) {
+                      <a class="doc-link" [routerLink]="['/compras/solicitudes', r.id]">{{ r.number ?? 'SC-' + r.id }}</a>
+                      <div class="text-[11px] text-ink-3 tabular">pend. {{ r.pending_base | number: '1.0-2' }} {{ it.product?.base_unit }}</div>
+                    } @else {
+                      <span class="text-ink-3">—</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm tabular text-ink-2">{{ it.unit?.code ?? '—' }}</td>
+                  <td class="px-3 py-3 text-sm tabular text-right text-ink">
+                    {{ it.quantity | number: '1.0-4' }}
+                    @if (it.factor !== 1) {
+                      <div class="text-[11px] text-ink-3">= {{ it.qty_base | number: '1.0-2' }} {{ it.product?.base_unit }}</div>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm tabular text-right text-ink">{{ it.unit_price | currency: 'COP' : 'symbol-narrow' : '1.0-2' }}</td>
+                  <td class="px-3 py-3 text-sm tabular text-right text-ink-2">
+                    {{ it.base_price | currency: 'COP' : 'symbol-narrow' : '1.0-2' }}
+                    <span class="text-[11px] text-ink-3">/ {{ it.product?.base_unit }}</span>
+                  </td>
+                  <td class="px-3 py-3 text-sm tabular text-right text-ink-2">{{ it.tax_rate | number: '1.0-2' }}%</td>
+                  <td class="px-3 py-3 text-sm tabular text-right text-ink-2">{{ it.delivery_days !== null ? it.delivery_days + ' d' : '—' }}</td>
+                  <td class="px-3 py-3 text-sm tabular text-right font-medium text-ink">{{ it.line_total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3">
+                    @if (it.purchase_order_item_id) {
+                      <span class="chip chip-info" pTooltip="Ya tiene orden de compra" tooltipPosition="top">En OC</span>
+                    } @else if (it.is_selected) {
+                      <span class="chip chip-success">Seleccionado</span>
+                    } @else {
+                      <span class="text-ink-3 text-sm">—</span>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="10" class="px-5 py-8 text-center text-sm text-ink-3">Esta cotización no tiene ítems.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="border-t border-line px-5 py-4 flex justify-end">
+          <dl class="w-full max-w-xs space-y-1.5 text-sm">
+            <div class="flex justify-between">
+              <dt class="text-ink-3">Subtotal</dt>
+              <dd class="tabular text-ink-2">{{ q.subtotal | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-ink-3">IVA</dt>
+              <dd class="tabular text-ink-2">{{ q.tax | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            </div>
+            <div class="flex justify-between border-t border-line pt-2 mt-2">
+              <dt class="font-semibold text-ink">Total</dt>
+              <dd class="tabular font-semibold text-ink text-base">{{ q.total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4 min-w-0">
+      <app-attachments
+        type="quotation"
+        [documentId]="q.id"
+        [items]="q.attachments ?? []"
+        [canEdit]="canEdit()"
+        hint="Sube la cotización del proveedor en PDF o foto"
+        (changed)="reload()"
+      />
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Información</span></div>
+        <div class="card-body text-sm space-y-3">
+          <div>
+            <div class="th-label">Creada por</div>
+            <div class="text-ink mt-0.5">{{ q.creator?.name ?? '—' }}</div>
+          </div>
+          <div>
+            <div class="th-label">Fecha de creación</div>
+            <div class="text-ink tabular mt-0.5">{{ q.created_at | date: 'd MMM y, HH:mm' }}</div>
+          </div>
+          <div>
+            <div class="th-label">Última actualización</div>
+            <div class="text-ink tabular mt-0.5">{{ q.updated_at | date: 'd MMM y, HH:mm' }}</div>
+          </div>
+          @if (q.status === 'borrador') {
+            <p class="text-xs text-ink-3 border-t border-line pt-3">
+              Marca la cotización como <span class="font-medium text-ink">recibida</span> para que sus precios aparezcan en la comparativa.
+            </p>
+          } @else if (q.status === 'recibida') {
+            <p class="text-xs text-ink-3 border-t border-line pt-3">
+              Al generar órdenes de compra desde la comparativa, la cotización pasará a <span class="font-medium text-ink">seleccionada</span>.
+            </p>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+}

@@ -1,0 +1,219 @@
+<app-page-header title="Bandeja de aprobaciones" [subtitle]="subtitle()" [crumbs]="[{ label: 'Compras' }, { label: 'Bandeja de aprobaciones' }]">
+  <p-button icon="pi pi-refresh" label="Actualizar" severity="secondary" [outlined]="true" [loading]="loading()" (onClick)="loadInbox()" />
+</app-page-header>
+
+<p-tabs [value]="tab()" (valueChange)="onTabChange($event)">
+  <p-tablist>
+    <p-tab value="requests">
+      Solicitudes de compra
+      <span class="ml-1.5 chip !h-5 !px-1.5" [class.chip-pending]="requests().length" [class.chip-draft]="!requests().length">{{ inbox()?.counts?.purchase_requests ?? 0 }}</span>
+    </p-tab>
+    <p-tab value="orders">
+      Órdenes de compra
+      <span class="ml-1.5 chip !h-5 !px-1.5" [class.chip-pending]="orders().length" [class.chip-draft]="!orders().length">{{ inbox()?.counts?.purchase_orders ?? 0 }}</span>
+    </p-tab>
+    <p-tab value="history">Historial</p-tab>
+  </p-tablist>
+
+  <p-tabpanels class="!bg-transparent !p-0 !pt-4">
+    <!-- ================= Solicitudes ================= -->
+    <p-tabpanel value="requests">
+      @if (loading() && !inbox()) {
+        <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</div>
+      } @else if (!requests().length) {
+        <div class="card card-body flex flex-col items-center gap-2 py-14 text-ink-3">
+          <span class="material-symbols-outlined !text-[40px]">task_alt</span>
+          <span class="text-sm font-medium text-ink-2">No hay solicitudes pendientes de aprobación.</span>
+          <span class="text-xs">Las solicitudes enviadas por los solicitantes aparecerán aquí.</span>
+        </div>
+      } @else {
+        <div class="space-y-3">
+          @for (item of requests(); track item.id) {
+            <ng-container *ngTemplateOutlet="inboxCard; context: { $implicit: item }" />
+          }
+        </div>
+      }
+    </p-tabpanel>
+
+    <!-- ================= Órdenes ================= -->
+    <p-tabpanel value="orders">
+      @if (loading() && !inbox()) {
+        <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</div>
+      } @else if (!orders().length) {
+        <div class="card card-body flex flex-col items-center gap-2 py-14 text-ink-3">
+          <span class="material-symbols-outlined !text-[40px]">task_alt</span>
+          <span class="text-sm font-medium text-ink-2">No hay órdenes de compra pendientes de aprobación.</span>
+          <span class="text-xs">Las órdenes enviadas por compras aparecerán aquí.</span>
+        </div>
+      } @else {
+        <div class="space-y-3">
+          @for (item of orders(); track item.id) {
+            <ng-container *ngTemplateOutlet="inboxCard; context: { $implicit: item }" />
+          }
+        </div>
+      }
+    </p-tabpanel>
+
+    <!-- ================= Historial ================= -->
+    <p-tabpanel value="history">
+      <div class="card overflow-hidden">
+        <p-table
+          [value]="history()"
+          [lazy]="true"
+          (onLazyLoad)="onHistoryLazyLoad($event)"
+          [paginator]="true"
+          [rows]="historyPerPage()"
+          [first]="historyFirst"
+          [totalRecords]="historyTotal()"
+          [rowsPerPageOptions]="[10, 20, 50]"
+          [loading]="historyLoading()"
+          [showCurrentPageReport]="true"
+          currentPageReportTemplate="{first}–{last} de {totalRecords}"
+          dataKey="id"
+        >
+          <ng-template #header>
+            <tr>
+              <th class="w-32">Documento</th>
+              <th class="w-44">Tipo</th>
+              <th class="w-32">Resultado</th>
+              <th>Solicitó</th>
+              <th>Decidió</th>
+              <th class="w-40">Fecha</th>
+              <th>Comentario</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-row>
+            <tr>
+              <td>
+                @if (row.number) {
+                  <a class="doc-link" [routerLink]="detailLink(row)">{{ row.number }}</a>
+                } @else {
+                  <span class="text-ink-3">—</span>
+                }
+              </td>
+              <td class="text-ink-2">{{ typeLabel(row.type) }}</td>
+              <td><app-chip [tone]="statusTone(row.status)" [label]="row.status === 'aprobada' ? 'Aprobada' : 'Rechazada'" /></td>
+              <td class="text-ink-2">{{ row.requester ?? '—' }}</td>
+              <td class="text-ink-2">{{ row.decider ?? '—' }}</td>
+              <td class="tabular text-ink-2">{{ row.decided_at ? (row.decided_at | date: 'dd/MM/yyyy HH:mm') : '—' }}</td>
+              <td class="text-ink-2">
+                @if (row.comment) {
+                  <span class="italic">“{{ row.comment }}”</span>
+                } @else {
+                  <span class="text-ink-3">—</span>
+                }
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template #emptymessage>
+            <tr>
+              <td colspan="7" class="text-center py-12">
+                <div class="flex flex-col items-center gap-2 text-ink-3">
+                  <span class="material-symbols-outlined !text-[36px]">history</span>
+                  <span class="text-sm">Aún no hay decisiones registradas.</span>
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </div>
+    </p-tabpanel>
+  </p-tabpanels>
+</p-tabs>
+
+<!-- ================= Tarjeta de documento pendiente ================= -->
+<ng-template #inboxCard let-item>
+  <div class="card">
+    <div class="card-body flex flex-col lg:flex-row lg:items-center gap-4">
+      <!-- Identificación -->
+      <div class="lg:w-64 shrink-0">
+        <div class="flex items-center gap-2">
+          <a class="doc-link text-lg" [routerLink]="detailLink(item)">{{ item.number }}</a>
+          @if (item.priority) {
+            <app-chip [tone]="priorityTone(item.priority)" [label]="priorityLabel(item.priority)" />
+          }
+        </div>
+        <div class="text-xs text-ink-3">{{ item.title }}</div>
+        <div class="text-sm text-ink mt-1.5">{{ item.subtitle }}</div>
+        <div class="text-xs text-ink-3 mt-1 flex flex-wrap gap-x-2">
+          <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined !text-[14px]">person</span>{{ item.requester }}</span>
+          <span>·</span>
+          <span class="tabular">{{ item.submitted_at ? (item.submitted_at | date: 'd MMM y, HH:mm') : '—' }}</span>
+        </div>
+      </div>
+
+      <!-- Resumen de ítems -->
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-ink-3 mb-1 tabular">{{ item.items_count }} {{ item.items_count === 1 ? 'ítem' : 'ítems' }}</div>
+        <ul class="text-sm text-ink-2 space-y-0.5">
+          @for (line of item.items_preview; track $index) {
+            <li class="truncate flex items-center gap-1.5">
+              <span class="inline-block w-1 h-1 rounded-full bg-slate-400 shrink-0"></span>{{ line }}
+            </li>
+          }
+          @if (item.items_count > item.items_preview.length) {
+            <li class="text-xs text-ink-3">+{{ item.items_count - item.items_preview.length }} más</li>
+          }
+        </ul>
+        @if (item.notes) {
+          <p class="text-xs text-ink-3 italic mt-1.5 truncate" [pTooltip]="item.notes" tooltipPosition="top">“{{ item.notes }}”</p>
+        }
+      </div>
+
+      <!-- Total (OC) -->
+      @if (item.total !== null) {
+        <div class="lg:w-44 lg:text-right shrink-0">
+          <div class="text-xs text-ink-3">Total</div>
+          <div class="text-xl font-semibold text-ink tabular">{{ item.total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+        </div>
+      }
+
+      <!-- Acciones -->
+      <div class="flex items-center gap-2 lg:justify-end shrink-0 flex-wrap">
+        <p-button label="Ver detalle" icon="pi pi-eye" severity="secondary" [outlined]="true" size="small" (onClick)="goDetail(item)" />
+        @if (canDecide(item)) {
+          <p-button label="Rechazar" icon="pi pi-times" severity="danger" [outlined]="true" size="small" [disabled]="actingId() !== null" (onClick)="openDecision(item, 'reject')" />
+          <p-button label="Aprobar" icon="pi pi-check" severity="success" size="small" [loading]="actingId() === keyOf(item)" [disabled]="actingId() !== null && actingId() !== keyOf(item)" (onClick)="openDecision(item, 'approve')" />
+        }
+      </div>
+    </div>
+  </div>
+</ng-template>
+
+<!-- ================= Diálogo aprobar / rechazar ================= -->
+<p-dialog
+  [visible]="decisionOpen()"
+  (visibleChange)="decisionOpen.set($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: '32rem', maxWidth: '95vw' }"
+  [header]="(decisionMode() === 'reject' ? 'Rechazar ' : 'Aprobar ') + (decisionItem()?.number ?? '')"
+>
+  @if (decisionItem(); as item) {
+    <div class="space-y-3">
+      <div class="text-sm text-ink-2">
+        <span class="font-medium text-ink">{{ item.title }}</span> · {{ item.subtitle }}
+        <span class="text-ink-3">· {{ item.requester }}</span>
+      </div>
+      @if (decisionMode() === 'reject') {
+        <label class="field-label">Motivo del rechazo <span class="text-red-500">*</span></label>
+        <textarea pTextarea rows="4" class="w-full" [ngModel]="decisionText()" (ngModelChange)="decisionText.set($event)" maxlength="500" placeholder="Explica por qué se rechaza; el solicitante lo verá."></textarea>
+        @if (decisionTried() && !decisionText().trim()) {
+          <p class="field-error">El motivo es obligatorio.</p>
+        }
+      } @else {
+        <label class="field-label">Comentario (opcional)</label>
+        <textarea pTextarea rows="3" class="w-full" [ngModel]="decisionText()" (ngModelChange)="decisionText.set($event)" maxlength="500" placeholder="Ej. OK, prioridad mina norte"></textarea>
+      }
+    </div>
+  }
+  <ng-template #footer>
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="actingId() !== null" (onClick)="decisionOpen.set(false)" />
+    @if (decisionMode() === 'reject') {
+      <p-button label="Confirmar rechazo" icon="pi pi-times" severity="danger" [loading]="actingId() !== null" (onClick)="confirmDecision()" />
+    } @else {
+      <p-button label="Aprobar" icon="pi pi-check" severity="success" [loading]="actingId() !== null" (onClick)="confirmDecision()" />
+    }
+  </ng-template>
+</p-dialog>

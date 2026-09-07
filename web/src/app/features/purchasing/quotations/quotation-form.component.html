@@ -1,0 +1,395 @@
+<app-page-header
+  [title]="title()"
+  [subtitle]="isEdit() ? (quotation()?.supplier?.name ?? '') : 'Registra la oferta de un proveedor para uno o más productos'"
+  [crumbs]="[{ label: 'Compras' }, { label: 'Cotizaciones', route: '/compras/cotizaciones' }, { label: isEdit() ? (quotation()?.number ?? '…') : 'Nueva' }]"
+>
+  <app-chip chip [tone]="statusTone(status())" [label]="statusLabel()" />
+  <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancel()" />
+  @if (canEdit()) {
+    <p-button
+      label="Guardar"
+      icon="pi pi-save"
+      [severity]="canReceive() ? 'secondary' : 'primary'"
+      [loading]="saving()"
+      [disabled]="loading()"
+      (onClick)="save(false)"
+    />
+    @if (canReceive()) {
+      <p-button label="Guardar y marcar recibida" icon="pi pi-check" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+    }
+  }
+</app-page-header>
+
+<form [formGroup]="form" (ngSubmit)="save(false)" novalidate class="space-y-4">
+  <!-- ================= Proveedor y vigencia ================= -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Proveedor y vigencia</span>
+      @if (loading()) {
+        <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</span>
+      }
+    </div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div class="xl:col-span-2">
+        <app-field label="Proveedor" [required]="true" [control]="form.controls.supplier_id" [serverError]="err('supplier_id')" [submitted]="submitted()">
+          <p-select
+            formControlName="supplier_id"
+            [options]="suppliers()"
+            optionLabel="name"
+            optionValue="id"
+            placeholder="Selecciona un proveedor"
+            [filter]="true"
+            filterBy="name,document_number"
+            filterPlaceholder="Buscar por nombre o NIT…"
+            [showClear]="true"
+            appendTo="body"
+            styleClass="w-full"
+          >
+            <ng-template #item let-s>
+              <div class="flex flex-col leading-tight">
+                <span class="text-sm">{{ s.name }}</span>
+                <span class="text-xs text-ink-3 tabular">{{ s.document_type }} {{ s.document_number }}@if (s.city) { · {{ s.city }} }</span>
+              </div>
+            </ng-template>
+          </p-select>
+        </app-field>
+      </div>
+      <app-field label="Fecha" [required]="true" [control]="form.controls.date" [serverError]="err('date')" [submitted]="submitted()">
+        <p-datepicker formControlName="date" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full" />
+      </app-field>
+      <app-field label="Válida hasta" hint="Después de esta fecha la cotización se marca como vencida." [control]="form.controls.valid_until" [serverError]="err('valid_until')" [submitted]="submitted()">
+        <p-datepicker
+          formControlName="valid_until"
+          dateFormat="dd/mm/yy"
+          [showIcon]="true"
+          [showClear]="true"
+          [minDate]="form.controls.date.value ?? undefined"
+          appendTo="body"
+          placeholder="dd/mm/aaaa"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </app-field>
+      <div class="md:col-span-2 xl:col-span-4">
+        <app-field label="Observaciones" [serverError]="err('notes')">
+          <textarea pTextarea formControlName="notes" rows="2" class="w-full" placeholder="Condiciones de pago, descuentos, referencia de la oferta del proveedor…"></textarea>
+        </app-field>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Ítems ================= -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">
+          Ítems
+          @if (itemsArray.length) {
+            <span class="ml-1.5 chip chip-draft !h-5 !px-1.5">{{ itemsArray.length }}</span>
+          }
+        </div>
+        <p class="text-xs text-ink-3 mt-0.5">Precios sin IVA en la unidad cotizada. El sistema convierte a la unidad base para comparar proveedores.</p>
+      </div>
+      @if (canEdit()) {
+        <div class="flex items-center gap-2">
+          <p-button label="Traer ítems de solicitudes aprobadas" icon="pi pi-download" severity="secondary" [outlined]="true" size="small" [disabled]="loading()" (onClick)="openPicker()" />
+          <p-button label="Agregar ítem" icon="pi pi-plus" severity="secondary" [outlined]="true" size="small" [disabled]="loading()" (onClick)="addItem()" />
+        </div>
+      }
+    </div>
+
+    @if (!itemsArray.length) {
+      <div class="card-body text-center py-10">
+        <div class="flex flex-col items-center gap-2 text-ink-3">
+          <span class="material-symbols-outlined !text-[36px]">list_alt</span>
+          <span class="text-sm">Aún no hay ítems. Tráelos desde las solicitudes aprobadas o agrégalos manualmente.</span>
+        </div>
+        @if (submitted() && err('items'); as e) {
+          <p class="field-error mt-2">{{ e }}</p>
+        }
+      </div>
+    } @else {
+      <div class="overflow-x-auto" formArrayName="items">
+        <table class="w-full min-w-[1100px]">
+          <thead>
+            <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+              <th class="th-label text-left px-5 py-2.5 min-w-[260px]">Producto</th>
+              <th class="th-label text-left px-3 py-2.5 w-28">Solicitud</th>
+              <th class="th-label text-left px-3 py-2.5 w-44">Unidad</th>
+              <th class="th-label text-right px-3 py-2.5 w-32">Cantidad</th>
+              <th class="th-label text-right px-3 py-2.5 w-44">Precio unitario</th>
+              <th class="th-label text-left px-3 py-2.5 w-24">IVA</th>
+              <th class="th-label text-right px-3 py-2.5 w-28">Plazo (días)</th>
+              <th class="th-label text-right px-3 py-2.5 w-36">Subtotal</th>
+              <th class="w-12"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of itemsArray.controls; track g; let i = $index) {
+              <tr [formGroupName]="i" class="border-b border-line last:border-b-0 align-top">
+                <!-- Producto -->
+                <td class="px-5 py-3">
+                  @if (g.controls.purchase_request_item_id.value) {
+                    <div class="text-sm font-medium text-ink">{{ g.controls.product.value?.name ?? '—' }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ g.controls.product.value?.sku }}</div>
+                  } @else {
+                    <app-product-picker formControlName="product" />
+                  }
+                  @if (err('items.' + i + '.product_id'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (showError(g, 'product')) {
+                    <p class="field-error">Selecciona un producto.</p>
+                  }
+                </td>
+                <!-- Solicitud -->
+                <td class="px-3 py-3">
+                  @if (g.controls.request_number.value; as num) {
+                    <span class="chip chip-info !h-6 tabular" pTooltip="Ítem traído de la solicitud aprobada" tooltipPosition="top">{{ num }}</span>
+                  } @else {
+                    <span class="text-ink-3 text-sm">—</span>
+                  }
+                </td>
+                <!-- Unidad -->
+                <td class="px-3 py-3">
+                  <p-select
+                    formControlName="unit_id"
+                    [options]="unitOptionsByRow()[i]"
+                    optionLabel="label"
+                    optionValue="id"
+                    [placeholder]="g.controls.product.value ? 'Unidad' : 'Elige producto'"
+                    appendTo="body"
+                    styleClass="w-full"
+                  >
+                    <ng-template #selectedItem let-u>
+                      <span class="tabular">{{ u?.code }}</span>
+                    </ng-template>
+                  </p-select>
+                  @if (err('items.' + i + '.unit_id'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (showError(g, 'unit_id')) {
+                    <p class="field-error">Selecciona la unidad.</p>
+                  }
+                </td>
+                <!-- Cantidad -->
+                <td class="px-3 py-3">
+                  <p-inputnumber
+                    formControlName="quantity"
+                    mode="decimal"
+                    locale="es-CO"
+                    [min]="0"
+                    [minFractionDigits]="0"
+                    [maxFractionDigits]="4"
+                    styleClass="w-full"
+                    inputStyleClass="w-full tabular text-right"
+                  />
+                  @if (factorByRow()[i] !== 1 && g.controls.quantity.value) {
+                    <p class="text-[11px] text-ink-3 tabular text-right mt-1">
+                      = {{ g.controls.quantity.value! * factorByRow()[i] | number: '1.0-2' }} {{ g.controls.product.value?.base_unit?.code }}
+                    </p>
+                  }
+                  @if (err('items.' + i + '.quantity'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (showError(g, 'quantity')) {
+                    <p class="field-error">Cantidad mayor que 0.</p>
+                  }
+                </td>
+                <!-- Precio unitario -->
+                <td class="px-3 py-3">
+                  <p-inputnumber
+                    formControlName="unit_price"
+                    mode="currency"
+                    currency="COP"
+                    locale="es-CO"
+                    [min]="0"
+                    [minFractionDigits]="0"
+                    [maxFractionDigits]="2"
+                    styleClass="w-full"
+                    inputStyleClass="w-full tabular text-right"
+                  />
+                  @if (factorByRow()[i] !== 1 && g.controls.unit_price.value !== null) {
+                    <p class="text-[11px] text-ink-3 tabular text-right mt-1">
+                      ≈ {{ g.controls.unit_price.value! / factorByRow()[i] | currency: 'COP' : 'symbol-narrow' : '1.0-2' }} / {{ g.controls.product.value?.base_unit?.code }}
+                    </p>
+                  }
+                  @if (err('items.' + i + '.unit_price'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (showError(g, 'unit_price')) {
+                    <p class="field-error">Ingresa el precio.</p>
+                  }
+                </td>
+                <!-- IVA -->
+                <td class="px-3 py-3">
+                  <p-select formControlName="tax_rate" [options]="taxOptions()" optionLabel="label" optionValue="value" appendTo="body" styleClass="w-full" />
+                  @if (err('items.' + i + '.tax_rate'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  }
+                </td>
+                <!-- Plazo -->
+                <td class="px-3 py-3">
+                  <p-inputnumber formControlName="delivery_days" mode="decimal" [min]="0" [max]="365" [maxFractionDigits]="0" placeholder="—" styleClass="w-full" inputStyleClass="w-full tabular text-right" />
+                  @if (err('items.' + i + '.delivery_days'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  }
+                </td>
+                <!-- Subtotal -->
+                <td class="px-3 py-3 text-right">
+                  <div class="text-sm font-medium text-ink tabular leading-9">{{ lineTotals()[i] | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+                </td>
+                <td class="px-2 py-2 text-right">
+                  @if (canEdit()) {
+                    <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Quitar" (onClick)="removeItem(i)" />
+                  }
+                </td>
+              </tr>
+              @for (msg of rowErrors(i, ['product_id', 'unit_id', 'quantity', 'unit_price', 'tax_rate', 'delivery_days']); track msg) {
+                <tr class="border-b border-line">
+                  <td colspan="9" class="px-5 pb-2 field-error">{{ msg }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (err('items'); as e) {
+        <p class="field-error px-5 py-3 border-t border-line">{{ e }}</p>
+      }
+
+      <!-- Totales -->
+      <div class="border-t border-line px-5 py-4 flex justify-end">
+        <dl class="w-full max-w-xs space-y-1.5 text-sm">
+          <div class="flex justify-between">
+            <dt class="text-ink-3">Subtotal</dt>
+            <dd class="tabular text-ink-2">{{ totals().subtotal | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-ink-3">IVA</dt>
+            <dd class="tabular text-ink-2">{{ totals().tax | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          </div>
+          <div class="flex justify-between border-t border-line pt-2 mt-2">
+            <dt class="font-semibold text-ink">Total</dt>
+            <dd class="tabular font-semibold text-ink text-base">{{ totals().total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          </div>
+        </dl>
+      </div>
+    }
+  </div>
+
+  <!-- ================= Adjuntos ================= -->
+  @if (quotation(); as q) {
+    <app-attachments
+      type="quotation"
+      [documentId]="q.id"
+      [items]="q.attachments ?? []"
+      [canEdit]="canEdit()"
+      hint="Sube la cotización del proveedor en PDF o foto"
+      (changed)="reloadAttachments()"
+    />
+  } @else {
+    <div class="card card-body flex items-center gap-3 text-sm text-ink-3">
+      <span class="material-symbols-outlined text-ink-3">attach_file</span>
+      Guarda la cotización para adjuntar el PDF del proveedor.
+    </div>
+  }
+</form>
+
+<!-- ================= Diálogo: traer ítems de solicitudes aprobadas ================= -->
+<p-dialog
+  [visible]="pickerOpen()"
+  (visibleChange)="pickerOpen.set($event)"
+  header="Traer ítems de solicitudes aprobadas"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!pickerAdding()"
+  [closable]="!pickerAdding()"
+  [style]="{ width: '860px', maxWidth: '95vw' }"
+  contentStyleClass="!p-0"
+>
+  <div class="px-5 py-3 border-b border-line flex flex-wrap items-center gap-3">
+    <p-select
+      [options]="ctx.options()"
+      optionLabel="name"
+      optionValue="id"
+      placeholder="Todas las bodegas"
+      [showClear]="true"
+      [ngModel]="pickerWarehouseId()"
+      (ngModelChange)="setPickerWarehouse($event)"
+      appendTo="body"
+      styleClass="w-56"
+    />
+    <span class="text-xs text-ink-3">Se muestran los ítems de solicitudes aprobadas con cantidad pendiente por ordenar.</span>
+    <div class="flex-1"></div>
+    @if (pickerLoading()) {
+      <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</span>
+    } @else {
+      <span class="text-xs text-ink-3 tabular">{{ pendingVisibleCount() }} ítem(s)</span>
+    }
+  </div>
+
+  <div class="max-h-[55vh] overflow-y-auto">
+    @if (!pickerLoading() && !pendingGroups().length) {
+      <div class="flex flex-col items-center gap-2 text-ink-3 py-12">
+        <span class="material-symbols-outlined !text-[36px]">inventory_2</span>
+        <span class="text-sm">No hay ítems pendientes de cotizar en solicitudes aprobadas.</span>
+      </div>
+    } @else {
+      <table class="w-full">
+        <thead class="sticky top-0 z-10">
+          <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+            <th class="w-10 px-4 py-2"></th>
+            <th class="th-label text-left px-3 py-2">Producto</th>
+            <th class="th-label text-right px-3 py-2 w-40">Pendiente</th>
+            <th class="th-label text-left px-3 py-2 w-44">Bodega</th>
+            <th class="th-label text-left px-3 py-2 w-28">Prioridad</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (grp of pendingGroups(); track grp.request.id) {
+            <tr class="bg-canvas/60 border-b border-line">
+              <td class="px-4 py-2">
+                <p-checkbox [binary]="true" [ngModel]="groupAllPicked(grp)" (onChange)="toggleGroup(grp, !!$event.checked)" [inputId]="'grp_' + grp.request.id" />
+              </td>
+              <td colspan="4" class="px-3 py-2">
+                <label [for]="'grp_' + grp.request.id" class="flex flex-wrap items-center gap-2 cursor-pointer">
+                  <span class="doc-link text-sm">{{ grp.request.number }}</span>
+                  <span class="text-xs text-ink-3">{{ grp.request.warehouse.name }}</span>
+                  @if (grp.request.required_date) {
+                    <span class="text-xs text-ink-3">· requerido {{ grp.request.required_date | date: 'dd/MM/yyyy' }}</span>
+                  }
+                  <span class="text-xs text-ink-3 tabular">· {{ grp.items.length }} ítem(s)</span>
+                </label>
+              </td>
+            </tr>
+            @for (it of grp.items; track it.id) {
+              <tr class="border-b border-line last:border-b-0 hover:bg-canvas/40">
+                <td class="px-4 py-2">
+                  <p-checkbox [binary]="true" [ngModel]="isPicked(it.id)" (onChange)="togglePick(it.id, !!$event.checked)" [inputId]="'pi_' + it.id" />
+                </td>
+                <td class="px-3 py-2">
+                  <label [for]="'pi_' + it.id" class="cursor-pointer block">
+                    <div class="text-sm text-ink">{{ it.product.name }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product.sku }} · solicitado {{ it.quantity | number: '1.0-2' }} {{ it.unit.code }}</div>
+                  </label>
+                </td>
+                <td class="px-3 py-2 text-right tabular text-sm text-ink">{{ it.pending_base | number: '1.0-2' }} {{ it.product.base_unit }}</td>
+                <td class="px-3 py-2 text-sm text-ink-2">{{ it.request.warehouse.name }}</td>
+                <td class="px-3 py-2"><app-chip [tone]="priorityTone(it.request.priority)" [label]="priorityLabel(it.request.priority)" /></td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+
+  <div class="px-5 py-3 border-t border-line flex items-center justify-end gap-2">
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="pickerAdding()" (onClick)="pickerOpen.set(false)" />
+    <p-button
+      [label]="pickedCount() === 1 ? 'Agregar 1 ítem' : 'Agregar ' + pickedCount() + ' ítems'"
+      icon="pi pi-plus"
+      [disabled]="!pickedCount()"
+      [loading]="pickerAdding()"
+      (onClick)="addPicked()"
+    />
+  </div>
+</p-dialog>

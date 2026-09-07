@@ -1,0 +1,334 @@
+@if (order(); as o) {
+  <app-page-header
+    [title]="o.number"
+    [subtitle]="(o.supplier?.name ?? '—') + (o.supplier?.document_number ? ' · NIT ' + o.supplier?.document_number : '')"
+    [crumbs]="[{ label: 'Compras' }, { label: 'Órdenes de compra', route: '/compras/ordenes' }, { label: o.number }]"
+  >
+    <app-chip chip [tone]="statusTone(o.status)" [label]="o.status_label" />
+
+    @if (showPdf()) {
+      <p-button label="PDF" icon="pi pi-file-pdf" severity="secondary" [outlined]="true" [loading]="pdfLoading()" (onClick)="openPdf()" />
+    }
+    @if (showEdit()) {
+      <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [outlined]="true" (onClick)="goEdit()" />
+    }
+    @if (showReopen()) {
+      <p-button label="Reabrir" icon="pi pi-undo" severity="secondary" [outlined]="true" [loading]="acting() === 'reopen'" [disabled]="!!acting()" (onClick)="reopen()" />
+    }
+    @if (showClose()) {
+      <p-button label="Cerrar" icon="pi pi-lock" severity="secondary" [outlined]="true" [loading]="acting() === 'close'" [disabled]="!!acting()" (onClick)="close()" />
+    }
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="acting() === 'cancel'" [disabled]="!!acting()" (onClick)="cancel()" />
+    }
+    @if (showDecide()) {
+      <p-button label="Rechazar" icon="pi pi-times" severity="danger" [outlined]="true" [disabled]="!!acting()" (onClick)="openDecision('reject')" />
+      <p-button label="Aprobar" icon="pi pi-check" [disabled]="!!acting()" (onClick)="openDecision('approve')" />
+    }
+    @if (showSubmit()) {
+      <p-button label="Enviar a aprobación" icon="pi pi-send" [loading]="acting() === 'submit'" [disabled]="!!acting()" (onClick)="submit()" />
+    }
+    @if (showIssue()) {
+      <p-button label="Emitir" icon="pi pi-send" [loading]="acting() === 'issue'" [disabled]="!!acting()" (onClick)="issue()" />
+    }
+  </app-page-header>
+
+  <!-- ================= Banda de estado ================= -->
+  @if (isTerminalFailure()) {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">{{ o.status === 'anulada' ? 'Orden anulada' : 'Orden rechazada' }}</div>
+        @if (o.status === 'rechazada') {
+          <div class="text-ink-2 mt-0.5">{{ o.rejection_reason || 'Sin motivo registrado.' }}</div>
+          @if (lastDecision(); as d) {
+            <div class="text-xs text-ink-3 mt-1">{{ d.decider?.name }} · {{ d.decided_at | date: 'd MMM y, HH:mm' }}</div>
+          }
+          @if (showEdit()) {
+            <div class="text-xs text-ink-3 mt-1">Puedes corregirla y enviarla de nuevo a aprobación.</div>
+          }
+        } @else {
+          <div class="text-ink-2 mt-0.5">Esta orden fue anulada y no tiene efecto sobre solicitudes ni inventario.</div>
+        }
+      </div>
+    </div>
+  } @else {
+    <div class="card mb-4 overflow-x-auto">
+      <ol class="flex items-start min-w-[860px] px-4 py-4">
+        @for (s of steps(); track s.key; let i = $index; let last = $last) {
+          <li class="flex-1 flex flex-col items-center relative">
+            @if (!last) {
+              <div
+                class="absolute top-3.5 left-1/2 w-full h-0.5"
+                [class.bg-emerald-500]="s.state === 'done'"
+                [class.bg-slate-200]="s.state !== 'done'"
+              ></div>
+            }
+            <div
+              class="relative z-10 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ring-4 ring-white"
+              [class.bg-emerald-500]="s.state === 'done'"
+              [class.text-white]="s.state === 'done'"
+              [class.bg-brand]="s.state === 'current'"
+              [class.text-ink]="s.state === 'current'"
+              [class.bg-slate-200]="s.state === 'todo' || s.state === 'skipped'"
+              [class.text-slate-500]="s.state === 'todo' || s.state === 'skipped'"
+              [pTooltip]="s.state === 'skipped' ? 'Paso omitido: la orden se cerró sin completar la recepción' : undefined"
+              tooltipPosition="top"
+            >
+              @if (s.state === 'done') {
+                <span class="material-symbols-outlined !text-[16px]">check</span>
+              } @else if (s.state === 'skipped') {
+                <span class="material-symbols-outlined !text-[16px]">remove</span>
+              } @else {
+                {{ i + 1 }}
+              }
+            </div>
+            <div
+              class="mt-2 text-xs text-center leading-tight px-1"
+              [class.font-semibold]="s.state === 'current'"
+              [class.text-ink]="s.state === 'done' || s.state === 'current'"
+              [class.text-ink-3]="s.state === 'todo' || s.state === 'skipped'"
+              [class.line-through]="s.state === 'skipped'"
+            >
+              {{ s.label }}
+            </div>
+            @if (s.key === 'aprobada' && o.approver && o.approved_at) {
+              <div class="text-[11px] text-ink-3 text-center mt-0.5 px-1">{{ o.approver.name }} · {{ o.approved_at | date: 'd MMM HH:mm' }}</div>
+            } @else if (s.key === 'emitida' && o.issued_at) {
+              <div class="text-[11px] text-ink-3 text-center mt-0.5 px-1">{{ o.issued_at | date: 'd MMM HH:mm' }}</div>
+            } @else if (s.key === 'pendiente_aprobacion' && o.submitted_at) {
+              <div class="text-[11px] text-ink-3 text-center mt-0.5 px-1">{{ o.submitted_at | date: 'd MMM HH:mm' }}</div>
+            }
+          </li>
+        }
+      </ol>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Ítems</span>
+          <span class="text-xs text-ink-3">{{ items().length }} línea(s) · recibido {{ o.received_pct ?? 0 }}%</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[960px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5">Producto</th>
+                <th class="th-label text-left px-3 py-2.5 w-24">Solicitud</th>
+                <th class="th-label text-left px-3 py-2.5 w-20">Unidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Cantidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Precio</th>
+                <th class="th-label text-right px-3 py-2.5 w-16">IVA</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Total</th>
+                <th class="th-label text-left px-3 py-2.5 w-40">Recibido</th>
+                <th class="th-label text-right px-3 py-2.5 w-20">Devuelto</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Pendiente</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of items(); track it.id) {
+                <tr class="border-b border-line last:border-b-0 align-top">
+                  <td class="px-5 py-3">
+                    <div class="text-sm font-medium text-ink">{{ it.product?.name ?? '—' }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product?.sku }}@if (it.notes) { · <span class="italic">{{ it.notes }}</span> }</div>
+                  </td>
+                  <td class="px-3 py-3">
+                    @if (it.request) {
+                      <a class="doc-link text-sm" [routerLink]="['/compras/solicitudes', it.request.id]">{{ it.request.number ?? '#' + it.request.id }}</a>
+                    } @else {
+                      <span class="text-ink-3 text-xs">Manual</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">
+                    {{ it.unit?.code ?? '—' }}
+                    @if (it.factor !== 1) {
+                      <div class="text-[11px] text-ink-3">×{{ fmt(it.factor) }} {{ it.product?.base_unit }}</div>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink">{{ fmt(it.quantity) }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ it.unit_price | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ fmt(it.tax_rate) }}%</td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink">{{ it.line_total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3">
+                    <div class="flex items-center gap-2">
+                      <div class="relative flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div
+                          class="absolute inset-y-0 left-0 rounded-full"
+                          [class.bg-emerald-500]="receivedPct(it) >= 100"
+                          [class.bg-orange-500]="receivedPct(it) < 100"
+                          [style.width.%]="receivedPct(it)"
+                        ></div>
+                      </div>
+                    </div>
+                    <div class="text-[11px] text-ink-3 tabular mt-1">{{ fmt(it.qty_received_base) }} / {{ fmt(it.qty_base) }} {{ it.product?.base_unit }}</div>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular" [class.text-ink-3]="!it.qty_returned_base" [class.text-[#B91C1C]]="it.qty_returned_base > 0">
+                    {{ fmt(it.qty_returned_base) }}
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular" [class.text-ink]="it.pending_base > 0" [class.text-ink-3]="it.pending_base <= 0">
+                    {{ fmt(it.pending_base) }}
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="10" class="text-center py-8 text-sm text-ink-3">Sin ítems.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="flex justify-end px-5 py-4 border-t border-line">
+          <dl class="grid grid-cols-[auto_minmax(140px,auto)] gap-x-8 gap-y-1 text-sm tabular min-w-[280px]">
+            <dt class="text-ink-2">Subtotal</dt>
+            <dd class="text-right text-ink">{{ o.subtotal | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            <dt class="text-ink-2">IVA</dt>
+            <dd class="text-right text-ink">{{ o.tax | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            <dt class="text-base font-semibold text-ink pt-1 border-t border-line">Total</dt>
+            <dd class="text-right text-base font-semibold text-ink pt-1 border-t border-line">{{ o.total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Recepciones</span></div>
+          <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+            <span class="material-symbols-outlined !text-[20px]">inventory</span>
+            Disponible en la fase de inventario.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Facturas</span></div>
+          <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+            <span class="material-symbols-outlined !text-[20px]">receipt</span>
+            Disponible en cuentas por pagar.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Condiciones</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">Bodega de entrega</dt>
+          <dd class="text-ink text-right">{{ o.warehouse?.name ?? '—' }} @if (o.warehouse?.code) { <span class="text-xs text-ink-3 tabular">{{ o.warehouse?.code }}</span> }</dd>
+          <dt class="text-ink-3">Fecha</dt>
+          <dd class="text-ink text-right tabular">{{ o.date | date: 'dd/MM/yyyy' }}</dd>
+          <dt class="text-ink-3">Entrega esperada</dt>
+          <dd class="text-ink text-right tabular">{{ o.expected_date ? (o.expected_date | date: 'dd/MM/yyyy') : '—' }}</dd>
+          <dt class="text-ink-3">Forma de pago</dt>
+          <dd class="text-ink text-right">{{ paymentLabel() }}</dd>
+          <dt class="text-ink-3">Elaborado por</dt>
+          <dd class="text-ink text-right">{{ o.creator?.name ?? '—' }}</dd>
+          @if (o.supplier?.contact_name) {
+            <dt class="text-ink-3">Contacto</dt>
+            <dd class="text-ink text-right">{{ o.supplier?.contact_name }}</dd>
+          }
+          @if (o.notes) {
+            <dt class="text-ink-3 col-span-2 pt-1 border-t border-line">Observaciones</dt>
+            <dd class="text-ink-2 col-span-2 whitespace-pre-line">{{ o.notes }}</dd>
+          }
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Aprobación</span></div>
+        <div class="card-body text-sm">
+          @if (o.status === 'pendiente_aprobacion') {
+            <div class="flex items-center gap-2 text-ink-2">
+              <span class="chip chip-pending">Pendiente</span>
+              <span class="text-xs text-ink-3">Enviada {{ o.submitted_at | date: 'd MMM y, HH:mm' }}</span>
+            </div>
+          } @else if (o.approver && o.approved_at) {
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-semibold shrink-0">
+                {{ o.approver.name.charAt(0) }}
+              </div>
+              <div class="min-w-0">
+                <div class="font-medium text-ink truncate">{{ o.approver.name }}</div>
+                <div class="text-xs text-ink-3">{{ o.approved_at | date: 'd MMM y, HH:mm' }}</div>
+              </div>
+            </div>
+            @if (lastDecision()?.comment; as c) {
+              <div class="text-xs text-ink-2 mt-2 italic">“{{ c }}”</div>
+            }
+          } @else if (o.status === 'rechazada' && lastDecision(); as d) {
+            <div class="flex items-center gap-2"><span class="chip chip-danger">Rechazada</span><span class="text-xs text-ink-3">{{ d.decider?.name }} · {{ d.decided_at | date: 'd MMM y, HH:mm' }}</span></div>
+            @if (d.comment) {
+              <div class="text-xs text-ink-2 mt-2 italic">“{{ d.comment }}”</div>
+            }
+          } @else {
+            <span class="text-ink-3">Aún no se ha enviado a aprobación.</span>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Origen</span></div>
+        <div class="card-body text-sm">
+          @if (sourceRequests().length) {
+            <div class="flex flex-wrap gap-2">
+              @for (r of sourceRequests(); track r.id) {
+                <a class="doc-link inline-flex items-center gap-1" [routerLink]="['/compras/solicitudes', r.id]">
+                  <span class="material-symbols-outlined !text-[16px]">assignment</span>{{ r.number }}
+                </a>
+              }
+            </div>
+          } @else {
+            <span class="text-ink-3">Orden manual, sin solicitudes vinculadas.</span>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body">
+          <app-timeline [events]="timeline()" />
+        </div>
+      </div>
+
+      <app-attachments type="purchase_order" [documentId]="o.id" [items]="o.attachments ?? []" [canEdit]="canUpdate()" (changed)="load()" />
+    </div>
+  </div>
+} @else {
+  <app-page-header title="Orden de compra" [crumbs]="[{ label: 'Compras' }, { label: 'Órdenes de compra', route: '/compras/ordenes' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando orden…</div>
+}
+
+<!-- ================= Diálogo aprobar / rechazar ================= -->
+<p-dialog
+  [visible]="decisionOpen()"
+  (visibleChange)="decisionOpen.set($event)"
+  [header]="decisionMode() === 'approve' ? 'Aprobar orden' : 'Rechazar orden'"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!acting()"
+  [closable]="!acting()"
+  [style]="{ width: '460px', maxWidth: '95vw' }"
+>
+  <div class="space-y-4">
+    <p class="text-sm text-ink-2">
+      @if (decisionMode() === 'approve') {
+        Al aprobar <span class="font-semibold text-ink">{{ order()?.number }}</span> se comprometen las cantidades en las solicitudes de origen y la orden queda lista para emitirse.
+      } @else {
+        La orden <span class="font-semibold text-ink">{{ order()?.number }}</span> volverá al comprador con el motivo para que la corrija.
+      }
+    </p>
+    <app-field [label]="decisionMode() === 'approve' ? 'Comentario' : 'Motivo del rechazo'" [required]="decisionMode() === 'reject'" [serverError]="decisionError()" [submitted]="decisionSubmitted()">
+      <textarea pTextarea rows="3" class="w-full" [ngModel]="decisionText()" (ngModelChange)="decisionText.set($event)" [placeholder]="decisionMode() === 'approve' ? 'Opcional' : 'Ej. precio por encima del presupuesto'" maxlength="500"></textarea>
+    </app-field>
+    <div class="flex justify-end gap-2">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="!!acting()" (onClick)="decisionOpen.set(false)" />
+      @if (decisionMode() === 'approve') {
+        <p-button label="Aprobar" icon="pi pi-check" [loading]="acting() === 'approve'" (onClick)="decide()" />
+      } @else {
+        <p-button label="Rechazar" icon="pi pi-times" severity="danger" [loading]="acting() === 'reject'" (onClick)="decide()" />
+      }
+    </div>
+  </div>
+</p-dialog>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\DomainException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -29,6 +30,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         // Toda la API responde JSON, incluso si el cliente no manda Accept.
         $exceptions->shouldRenderJsonWhen(fn (Request $request) => $request->is('api/*') || $request->expectsJson());
+
+        $exceptions->render(function (DomainException $e, Request $request) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        });
 
         $exceptions->render(function (UnauthorizedException $e, Request $request) {
             return response()->json(['message' => 'No tienes permiso para realizar esta acción.'], 403);

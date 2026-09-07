@@ -42,9 +42,12 @@ class User extends Authenticatable
         return $this->belongsToMany(Warehouse::class, 'user_warehouse');
     }
 
-    /** Admin y consulta ven todas las bodegas; el resto solo las asignadas. */
+    /**
+     * Roles de oficina ven todas las bodegas (compran/aprueban para todas las minas);
+     * los roles de campo (bodeguero, solicitante) solo las asignadas.
+     */
     public function seesAllWarehouses(): bool
     {
-        return $this->hasAnyRole(['admin', 'consulta']);
+        return $this->hasAnyRole(['admin', 'consulta', 'aprobador', 'comprador', 'tesoreria']);
     }
 }

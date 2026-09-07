@@ -1,0 +1,222 @@
+@if (doc(); as d) {
+  <app-page-header
+    [title]="d.number"
+    [subtitle]="'Solicitud de compra · ' + (d.warehouse?.name ?? '') + ' · creada el ' + (d.created_at | date: 'd MMM y')"
+    [crumbs]="[{ label: 'Compras' }, { label: 'Solicitudes de compra', route: '/compras/solicitudes' }, { label: d.number }]"
+  >
+    <app-chip chip [tone]="statusTone(d.status)" [label]="d.status_label" />
+
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [disabled]="acting()" (onClick)="cancelRequest()" />
+    }
+    @if (showClose()) {
+      <p-button label="Cerrar" icon="pi pi-lock" severity="secondary" [outlined]="true" [disabled]="acting()" (onClick)="close()" />
+    }
+    @if (showEdit()) {
+      <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [disabled]="acting()" (onClick)="goEdit()" />
+    }
+    @if (showSubmit()) {
+      <p-button label="Enviar a aprobación" icon="pi pi-send" [loading]="acting()" (onClick)="submit()" />
+    }
+    @if (showDecide()) {
+      <p-button label="Rechazar" icon="pi pi-times" severity="danger" [outlined]="true" [disabled]="acting()" (onClick)="openDecision('reject')" />
+      <p-button label="Aprobar" icon="pi pi-check" severity="success" [loading]="acting()" (onClick)="openDecision('approve')" />
+    }
+  </app-page-header>
+
+  @if (d.status === 'rechazada') {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px] mt-0.5">block</span>
+      <div class="text-sm">
+        <div class="font-semibold text-[#B91C1C]">Solicitud rechazada</div>
+        <p class="text-ink-2 mt-0.5">{{ d.rejection_reason || 'Sin motivo registrado.' }}</p>
+        @if (showEdit()) {
+          <p class="text-xs text-ink-3 mt-1">Corrige la solicitud y vuelve a enviarla a aprobación.</p>
+        }
+      </div>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Datos</span>
+          @if (loading()) {
+            <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Actualizando…</span>
+          }
+        </div>
+        <div class="card-body grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4 text-sm">
+          <div>
+            <div class="th-label">Bodega destino</div>
+            <div class="text-ink mt-1">{{ d.warehouse?.name ?? '—' }}</div>
+            @if (d.warehouse?.code) {
+              <div class="text-xs text-ink-3 tabular">{{ d.warehouse?.code }}</div>
+            }
+          </div>
+          <div>
+            <div class="th-label">Fecha requerida</div>
+            <div class="text-ink mt-1 tabular">{{ d.required_date ? (d.required_date | date: 'dd/MM/yyyy') : '—' }}</div>
+          </div>
+          <div>
+            <div class="th-label">Prioridad</div>
+            <div class="mt-1"><app-chip [tone]="priorityTone(d.priority)" [label]="priorityLabel(d.priority)" /></div>
+          </div>
+          <div>
+            <div class="th-label">Solicitante</div>
+            <div class="text-ink mt-1">{{ d.requester?.name ?? '—' }}</div>
+            @if (d.creator && d.creator.id !== d.requester?.id) {
+              <div class="text-xs text-ink-3">Registrada por {{ d.creator.name }}</div>
+            }
+          </div>
+          <div class="sm:col-span-2 lg:col-span-4">
+            <div class="th-label">Observaciones</div>
+            <div class="text-ink-2 mt-1 whitespace-pre-line">{{ d.notes || '—' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Ítems</span>
+          <span class="text-xs text-ink-3 tabular">{{ items().length }} {{ items().length === 1 ? 'ítem' : 'ítems' }}</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[820px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5">Producto</th>
+                <th class="th-label text-left px-4 py-2.5 w-24">Unidad</th>
+                <th class="th-label text-right px-4 py-2.5 w-28">Cantidad</th>
+                <th class="th-label text-right px-4 py-2.5 w-28">Equiv. base</th>
+                <th class="th-label text-right px-4 py-2.5 w-28">Ordenado</th>
+                <th class="th-label text-right px-4 py-2.5 w-28">Despachado</th>
+                <th class="th-label text-right px-4 py-2.5 w-28">Pendiente</th>
+                <th class="th-label text-left px-4 py-2.5 w-40">Avance</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of items(); track it.id) {
+                <tr class="border-b border-line last:border-b-0 align-top">
+                  <td class="px-5 py-3">
+                    <div class="text-sm text-ink font-medium">{{ it.product?.name ?? ('Producto #' + it.product_id) }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product?.sku }}</div>
+                    @if (it.notes) {
+                      <div class="text-xs text-ink-2 mt-1 italic">{{ it.notes }}</div>
+                    }
+                  </td>
+                  <td class="px-4 py-3 text-sm">
+                    <span class="font-medium">{{ it.unit?.code ?? '—' }}</span>
+                    @if (it.factor !== 1 && it.product?.base_unit) {
+                      <div class="text-xs text-ink-3 tabular">1 {{ it.unit?.code }} = {{ it.factor | number: '1.0-3' }} {{ it.product?.base_unit }}</div>
+                    }
+                  </td>
+                  <td class="px-4 py-3 text-sm text-right tabular text-ink">{{ it.quantity | number: '1.0-3' }}</td>
+                  <td class="px-4 py-3 text-sm text-right tabular text-ink-2">{{ it.qty_base | number: '1.0-3' }} <span class="text-xs text-ink-3">{{ it.product?.base_unit }}</span></td>
+                  <td class="px-4 py-3 text-sm text-right tabular text-ink-2">{{ it.qty_ordered_base | number: '1.0-3' }}</td>
+                  <td class="px-4 py-3 text-sm text-right tabular text-ink-2">{{ it.qty_shipped_base | number: '1.0-3' }}</td>
+                  <td class="px-4 py-3 text-sm text-right tabular">
+                    @if (it.pending_base > 0) {
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[#FFF7ED] text-[#C2410C] font-semibold">{{ it.pending_base | number: '1.0-3' }}</span>
+                    } @else {
+                      <span class="text-ink-3">0</span>
+                    }
+                  </td>
+                  <td class="px-4 py-3">
+                    @if (progressOf(it); as p) {
+                      <div class="flex items-center gap-2 mt-1.5" [pTooltip]="'Ordenado ' + p.ordered + '% · Despachado ' + p.shipped + '%'" tooltipPosition="top">
+                        <div class="relative flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                          <div class="absolute inset-y-0 left-0 bg-blue-400 rounded-full" [style.width.%]="p.ordered"></div>
+                          <div class="absolute inset-y-0 left-0 bg-emerald-500 rounded-full" [style.width.%]="p.shipped"></div>
+                        </div>
+                        <span class="text-[11px] tabular text-ink-3 w-8 text-right">{{ p.ordered }}%</span>
+                      </div>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="8" class="px-5 py-10 text-center text-sm text-ink-3">La solicitud no tiene ítems.</td>
+                </tr>
+              }
+            </tbody>
+            @if (items().length) {
+              <tfoot>
+                <tr class="border-t border-[#CBD5E1] bg-[#F8FAFC] text-sm">
+                  <td class="px-5 py-2.5 text-ink-2" colspan="3">Totales en unidad base</td>
+                  <td class="px-4 py-2.5 text-right tabular font-medium">{{ totals().base | number: '1.0-3' }}</td>
+                  <td class="px-4 py-2.5 text-right tabular font-medium">{{ totals().ordered | number: '1.0-3' }}</td>
+                  <td class="px-4 py-2.5 text-right tabular font-medium">{{ totals().shipped | number: '1.0-3' }}</td>
+                  <td class="px-4 py-2.5 text-right tabular font-medium" [class.text-[#C2410C]]="totals().pending > 0">{{ totals().pending | number: '1.0-3' }}</td>
+                  <td class="px-4 py-2.5">
+                    @if (d.progress; as p) {
+                      <div class="flex items-center gap-2 text-[11px] text-ink-3">
+                        <span class="inline-block w-2 h-2 rounded-full bg-blue-400"></span>{{ p.ordered }}%
+                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 ml-1"></span>{{ p.shipped }}%
+                      </div>
+                    }
+                  </td>
+                </tr>
+              </tfoot>
+            }
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body"><app-timeline [events]="timeline()" /></div>
+      </div>
+
+      <app-attachments type="purchase_request" [documentId]="d.id" [items]="d.attachments ?? []" [canEdit]="canUpdate()" (changed)="load()" />
+    </div>
+  </div>
+
+  <!-- ================= Diálogo aprobar / rechazar ================= -->
+  <p-dialog
+    [visible]="decisionOpen()"
+    (visibleChange)="decisionOpen.set($event)"
+    [modal]="true"
+    [draggable]="false"
+    [resizable]="false"
+    [style]="{ width: '32rem', maxWidth: '95vw' }"
+    [header]="(decisionMode() === 'reject' ? 'Rechazar ' : 'Aprobar ') + d.number"
+  >
+    <div class="space-y-3">
+      @if (decisionMode() === 'reject') {
+        <p class="text-sm text-ink-2">Indica el motivo. El solicitante podrá corregir la solicitud y enviarla de nuevo.</p>
+        <label class="field-label">Motivo del rechazo <span class="text-red-500">*</span></label>
+        <textarea pTextarea rows="4" class="w-full" [ngModel]="decisionText()" (ngModelChange)="decisionText.set($event)" maxlength="500" placeholder="Ej. Cantidad excesiva para el frente actual…"></textarea>
+        @if (decisionTried() && !decisionText().trim()) {
+          <p class="field-error">El motivo es obligatorio.</p>
+        }
+      } @else {
+        <p class="text-sm text-ink-2">Al aprobar, los ítems quedan disponibles para cotizar y generar órdenes de compra.</p>
+        <label class="field-label">Comentario (opcional)</label>
+        <textarea pTextarea rows="3" class="w-full" [ngModel]="decisionText()" (ngModelChange)="decisionText.set($event)" maxlength="500" placeholder="Ej. OK, prioridad mina norte"></textarea>
+      }
+    </div>
+    <ng-template #footer>
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="acting()" (onClick)="decisionOpen.set(false)" />
+      @if (decisionMode() === 'reject') {
+        <p-button label="Confirmar rechazo" icon="pi pi-times" severity="danger" [loading]="acting()" (onClick)="confirmDecision()" />
+      } @else {
+        <p-button label="Aprobar" icon="pi pi-check" severity="success" [loading]="acting()" (onClick)="confirmDecision()" />
+      }
+    </ng-template>
+  </p-dialog>
+} @else {
+  <app-page-header title="Solicitud de compra" [crumbs]="[{ label: 'Compras' }, { label: 'Solicitudes de compra', route: '/compras/solicitudes' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3 flex items-center gap-2">
+    @if (loading()) {
+      <i class="pi pi-spin pi-spinner"></i> Cargando solicitud…
+    } @else {
+      <span class="material-symbols-outlined !text-[20px]">search_off</span> No se encontró la solicitud.
+      <p-button label="Volver al listado" [text]="true" size="small" (onClick)="goList()" />
+    }
+  </div>
+}

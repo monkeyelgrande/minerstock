@@ -19,11 +19,11 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Compras',
     items: [
-      { label: 'Solicitudes', icon: 'assignment', route: '/compras/solicitudes', soon: true },
-      { label: 'Aprobaciones', icon: 'verified', route: '/compras/aprobaciones', soon: true },
-      { label: 'Cotizaciones', icon: 'request_quote', route: '/compras/cotizaciones', soon: true },
-      { label: 'Comparativa', icon: 'compare_arrows', route: '/compras/comparativa', soon: true },
-      { label: 'Órdenes de compra', icon: 'shopping_cart_checkout', route: '/compras/ordenes', soon: true },
+      { label: 'Solicitudes', icon: 'assignment', route: '/compras/solicitudes', permission: 'purchase_requests.view' },
+      { label: 'Aprobaciones', icon: 'verified', route: '/compras/aprobaciones', permission: 'approvals.view' },
+      { label: 'Cotizaciones', icon: 'request_quote', route: '/compras/cotizaciones', permission: 'quotations.view' },
+      { label: 'Comparativa', icon: 'compare_arrows', route: '/compras/comparativa', permission: 'quotations.view' },
+      { label: 'Órdenes de compra', icon: 'shopping_cart_checkout', route: '/compras/ordenes', permission: 'purchase_orders.view' },
     ],
   },
   {

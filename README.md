@@ -87,6 +87,13 @@ Todas las rutas van bajo `/api`. Salvo `health` y `auth/login`, requieren `Autho
 | CRUD | `/admin/users` (+ `POST /admin/users/{id}/reset-password`) | usuarios, roles y bodegas asignadas |
 | GET/PUT | `/admin/roles`, `/admin/permissions` | matriz rol × permiso |
 | GET/PUT | `/admin/settings`, `/admin/document-sequences` | datos de empresa, IVA, consecutivos |
+| GET | `/dashboard` | resumen de indicadores según permisos |
+| CRUD + acciones | `/purchasing/purchase-requests` (`/submit`, `/approve`, `/reject`, `/cancel`, `/close`, `/counts`, `/pending-items`) | solicitudes de compra |
+| CRUD + acciones | `/purchasing/quotations` (`/receive`, `/discard`) | cotizaciones |
+| GET/POST | `/purchasing/comparison`, `/comparison/select`, `/comparison/generate-orders` | comparativa y generación de OC por proveedor |
+| CRUD + acciones | `/purchasing/purchase-orders` (`/submit`, `/approve`, `/reject`, `/reopen`, `/issue`, `/cancel`, `/close`, `/pdf`, `/counts`) | órdenes de compra |
+| GET | `/purchasing/approvals/inbox`, `/approvals/history` | bandeja de aprobaciones |
+| POST/DELETE | `/attachments` | adjuntos (fotos, PDF) sobre documentos |
 
 Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.create`, …) y se verifican con el middleware `permission:`.
 
@@ -95,7 +102,7 @@ Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.cre
 | Fase | Contenido | Estado |
 |---|---|---|
 | 0 | Base: login, roles, layout, maestros, usuarios, configuración | ✅ |
-| 1 | Compras: solicitudes con aprobación, cotizaciones, comparativa, OC | pendiente |
+| 1 | Compras: solicitudes con aprobación, cotizaciones, comparativa, OC con PDF | ✅ |
 | 2 | Inventario municipio: recepciones, kardex, stock, devoluciones, ajustes | pendiente |
 | 3 | Cuentas por pagar | pendiente |
 | 4 | Logística: planillas, recepción en mina, novedades | pendiente |

@@ -1,10 +1,23 @@
-import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { CurrencyPipe, DatePipe } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { map } from 'rxjs';
 
+import { ApiService } from '../../core/api/api.service';
 import { AuthService } from '../../core/auth/auth.service';
+import { Single } from '../../core/models/common.model';
+import { statusTone } from '../../core/models/purchasing.model';
 import { WarehouseContext } from '../../core/services/warehouse-context.service';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
+import { StatusChipComponent } from '../../shared/components/status-chip.component';
+
+interface DashboardData {
+  purchase_requests?: { enviada: number; aprobada: number; en_proceso: number; rechazada: number };
+  purchase_orders?: { pendiente_aprobacion: number; aprobada: number; emitida: number; recibida_parcial: number; month_total: number };
+  recent_orders?: { id: number; number: string; supplier: string; date: string; total: number; status: string; status_label: string; received_pct: number }[];
+  quotations?: { expiring: number; received: number };
+  approvals_pending?: { purchase_requests: number; purchase_orders: number };
+}
 
 interface Kpi {
   label: string;
@@ -12,69 +25,30 @@ interface Kpi {
   icon: string;
   tone: string;
   note: string;
+  route?: string;
 }
 
-/**
- * Dashboard. En fase 0 muestra la estructura con indicadores en cero;
- * cada fase siguiente conecta sus KPIs reales.
- */
 @Component({
   selector: 'app-dashboard',
-  imports: [PageHeaderComponent, RouterLink, DatePipe],
+  imports: [PageHeaderComponent, RouterLink, DatePipe, CurrencyPipe, StatusChipComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <app-page-header [title]="greeting()" [subtitle]="(today | date: 'EEEE, d \\'de\\' MMMM \\'de\\' y') + (ctx.active() ? ' — ' + ctx.active()!.name : '')" [crumbs]="[{ label: 'Dashboard' }]" />
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-      @for (k of kpis; track k.label) {
-        <div class="card p-5 flex flex-col justify-between">
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <span class="th-label block truncate">{{ k.label }}</span>
-              <span class="text-[28px] leading-9 font-bold text-ink tabular mt-1 block">{{ k.value }}</span>
-            </div>
-            <div class="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" [class]="k.tone">
-              <span class="material-symbols-outlined !text-[24px]">{{ k.icon }}</span>
-            </div>
-          </div>
-          <div class="mt-4 -mx-5 -mb-5 px-5 py-2.5 bg-canvas/70 text-xs text-ink-3 truncate">{{ k.note }}</div>
-        </div>
-      }
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div class="lg:col-span-2 card">
-        <div class="card-header">
-          <span class="card-title">Fase 0 · Base del sistema</span>
-          <span class="chip chip-success">En construcción</span>
-        </div>
-        <div class="card-body">
-          <p class="text-sm text-ink-2 mb-4">
-            Ya puedes cargar los catálogos. Los módulos de compras, inventario, logística y bodega se habilitan en las siguientes fases.
-          </p>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-            @for (link of quickLinks(); track link.route) {
-              <a [routerLink]="link.route" class="flex items-center gap-2 rounded-lg border border-line px-3 py-2.5 hover:border-brand hover:bg-amber-50/40 transition-colors">
-                <span class="material-symbols-outlined text-brand">{{ link.icon }}</span>
-                <span class="text-sm font-medium">{{ link.label }}</span>
-              </a>
-            }
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header"><span class="card-title">Pendientes por hacer</span></div>
-        <div class="card-body text-sm text-ink-3">
-          Aquí aparecerán solicitudes por aprobar, planillas por recibir y alertas de stock.
-        </div>
-      </div>
-    </div>
-  `,
+  templateUrl: './dashboard.component.html',
 })
 export class DashboardComponent {
   readonly auth = inject(AuthService);
   readonly ctx = inject(WarehouseContext);
+  private readonly api = inject(ApiService);
+
   readonly today = new Date();
+  readonly data = signal<DashboardData | null>(null);
+  readonly statusTone = statusTone;
+
+  constructor() {
+    this.api
+      .get<Single<DashboardData>>('dashboard')
+      .pipe(map((r) => r.data))
+      .subscribe((d) => this.data.set(d));
+  }
 
   readonly greeting = computed(() => {
     const h = this.today.getHours();
@@ -83,21 +57,74 @@ export class DashboardComponent {
     return `${saludo}, ${first}`;
   });
 
-  readonly kpis: Kpi[] = [
-    { label: 'Solicitudes aprobadas sin OC', value: '0', icon: 'assignment_turned_in', tone: 'bg-amber-50 text-amber-700', note: 'Fase 1 · Compras' },
-    { label: 'OC pendientes de recibir', value: '0', icon: 'local_shipping', tone: 'bg-blue-50 text-blue-700', note: 'Fase 2 · Inventario' },
-    { label: 'Facturas por vencer', value: '$0', icon: 'pending_actions', tone: 'bg-orange-50 text-orange-700', note: 'Fase 3 · Cuentas por pagar' },
-    { label: 'Planillas en tránsito', value: '0', icon: 'route', tone: 'bg-emerald-50 text-emerald-700', note: 'Fase 4 · Logística' },
-  ];
+  readonly subtitle = computed(() => {
+    const d = new DatePipe('es-CO').transform(this.today, "EEEE, d 'de' MMMM 'de' y") ?? '';
+    const w = this.ctx.active();
+    return d.charAt(0).toUpperCase() + d.slice(1) + (w ? ` — ${w.name}` : '');
+  });
+
+  readonly kpis = computed<Kpi[]>(() => {
+    const d = this.data();
+    const list: Kpi[] = [];
+    if (d?.purchase_requests) {
+      list.push({
+        label: 'Solicitudes aprobadas sin OC',
+        value: String(d.purchase_requests.aprobada),
+        icon: 'assignment_turned_in',
+        tone: 'bg-amber-50 text-amber-700',
+        note: `${d.purchase_requests.enviada} pendientes de aprobación · ${d.purchase_requests.en_proceso} en proceso`,
+        route: '/compras/solicitudes',
+      });
+    }
+    if (d?.purchase_orders) {
+      list.push({
+        label: 'OC pendientes de recibir',
+        value: String(d.purchase_orders.emitida + d.purchase_orders.recibida_parcial),
+        icon: 'local_shipping',
+        tone: 'bg-blue-50 text-blue-700',
+        note: `${d.purchase_orders.aprobada} aprobadas sin emitir · ${d.purchase_orders.pendiente_aprobacion} por aprobar`,
+        route: '/compras/ordenes',
+      });
+      list.push({
+        label: 'Compras del mes',
+        value: new CurrencyPipe('es-CO').transform(d.purchase_orders.month_total, 'COP', 'symbol-narrow', '1.0-0') ?? '$0',
+        icon: 'payments',
+        tone: 'bg-emerald-50 text-emerald-700',
+        note: 'Órdenes aprobadas o emitidas este mes',
+        route: '/compras/ordenes',
+      });
+    }
+    if (d?.quotations) {
+      list.push({
+        label: 'Cotizaciones por vencer',
+        value: String(d.quotations.expiring),
+        icon: 'request_quote',
+        tone: 'bg-orange-50 text-orange-700',
+        note: `${d.quotations.received} recibidas listas para comparar`,
+        route: '/compras/comparativa',
+      });
+    }
+    if (d?.approvals_pending && this.auth.can(['purchase_requests.approve', 'purchase_orders.approve'])) {
+      list.push({
+        label: 'Aprobaciones pendientes',
+        value: String(d.approvals_pending.purchase_requests + d.approvals_pending.purchase_orders),
+        icon: 'verified',
+        tone: 'bg-violet-50 text-violet-700',
+        note: `${d.approvals_pending.purchase_requests} solicitudes · ${d.approvals_pending.purchase_orders} órdenes`,
+        route: '/compras/aprobaciones',
+      });
+    }
+    return list;
+  });
 
   readonly quickLinks = computed(() => {
     this.auth.user();
     return [
+      { label: 'Nueva solicitud', icon: 'assignment_add', route: '/compras/solicitudes/nueva', perm: 'purchase_requests.create' },
+      { label: 'Cotizaciones', icon: 'request_quote', route: '/compras/cotizaciones', perm: 'quotations.view' },
+      { label: 'Comparativa', icon: 'compare_arrows', route: '/compras/comparativa', perm: 'quotations.view' },
       { label: 'Productos', icon: 'inventory_2', route: '/catalogo/productos', perm: 'products.view' },
       { label: 'Proveedores', icon: 'storefront', route: '/catalogo/proveedores', perm: 'suppliers.view' },
-      { label: 'Bodegas', icon: 'warehouse', route: '/catalogo/bodegas', perm: 'warehouses.view' },
-      { label: 'Vehículos', icon: 'directions_car', route: '/catalogo/vehiculos', perm: 'vehicles.view' },
-      { label: 'Choferes', icon: 'badge', route: '/catalogo/choferes', perm: 'drivers.view' },
       { label: 'Usuarios', icon: 'manage_accounts', route: '/admin/usuarios', perm: 'users.view' },
     ].filter((l) => this.auth.can(l.perm));
   });
