@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
@@ -60,6 +61,12 @@ class GoodsReceipt extends Model
     public function returns(): HasMany
     {
         return $this->hasMany(SupplierReturn::class);
+    }
+
+    /** Facturas que cubren esta recepción (a lo sumo una activa). */
+    public function invoices(): BelongsToMany
+    {
+        return $this->belongsToMany(SupplierInvoice::class, 'supplier_invoice_receipts')->withTimestamps();
     }
 
     public function movements(): MorphMany

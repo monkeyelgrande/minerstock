@@ -1,0 +1,181 @@
+<app-page-header
+  title="Pagos a proveedores"
+  subtitle="Abonos y pagos aplicados a facturas de proveedor"
+  [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Pagos a proveedores' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Registrar pago" icon="pi pi-plus" (onClick)="goCreate()" />
+  }
+</app-page-header>
+
+<!-- Pestañas por estado -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+    </button>
+  }
+</div>
+
+<app-crud-toolbar
+  [(search)]="search"
+  searchPlaceholder="Buscar por número, referencia o proveedor…"
+  [showActiveFilter]="false"
+  [createLabel]="null"
+>
+  <p-select
+    [options]="suppliers()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Proveedor"
+    [showClear]="true"
+    [filter]="suppliers().length > 8"
+    filterPlaceholder="Buscar proveedor…"
+    [ngModel]="supplierId()"
+    (ngModelChange)="setSupplier($event)"
+    styleClass="w-56"
+  />
+  <p-select
+    [options]="methods()"
+    optionLabel="label"
+    optionValue="value"
+    placeholder="Medio"
+    [showClear]="true"
+    [ngModel]="method()"
+    (ngModelChange)="setMethod($event)"
+    styleClass="w-44"
+  />
+  <div class="flex items-center gap-1.5">
+    <p-datepicker
+      [ngModel]="dateFrom()"
+      (ngModelChange)="setDateFrom($event)"
+      dateFormat="dd/mm/yy"
+      [showIcon]="true"
+      [showClear]="true"
+      [maxDate]="dateTo()"
+      appendTo="body"
+      placeholder="Desde"
+      styleClass="w-40"
+      inputStyleClass="w-full"
+    />
+    <span class="text-ink-3 text-xs">—</span>
+    <p-datepicker
+      [ngModel]="dateTo()"
+      (ngModelChange)="setDateTo($event)"
+      dateFormat="dd/mm/yy"
+      [showIcon]="true"
+      [showClear]="true"
+      [minDate]="dateFrom()"
+      appendTo="body"
+      placeholder="Hasta"
+      styleClass="w-40"
+      inputStyleClass="w-full"
+    />
+  </div>
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="date"
+    [sortOrder]="-1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="number" class="w-32">Número <p-sortIcon field="number" /></th>
+        <th>Proveedor</th>
+        <th pSortableColumn="date" class="w-32">Fecha <p-sortIcon field="date" /></th>
+        <th class="w-36">Medio</th>
+        <th class="w-40">Referencia</th>
+        <th>Facturas</th>
+        <th pSortableColumn="amount" class="w-36 text-right">Valor <p-sortIcon field="amount" /></th>
+        <th pSortableColumn="status" class="w-32">Estado <p-sortIcon field="status" /></th>
+        <th class="w-24 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/pagos/pagos', row.id]">{{ row.number }}</a>
+        </td>
+        <td>
+          <div class="text-ink font-medium">{{ row.supplier?.name ?? '—' }}</div>
+          @if (row.supplier?.document_number) {
+            <div class="text-xs text-ink-3 tabular">NIT {{ row.supplier.document_number }}</div>
+          }
+        </td>
+        <td class="tabular text-ink-2">{{ row.date | date: 'dd/MM/yyyy' }}</td>
+        <td class="text-ink-2">{{ row.method_label }}</td>
+        <td class="tabular text-ink-2">{{ row.reference || '—' }}</td>
+        <td>
+          @if (invoiceNumbers(row); as inv) {
+            @if (inv.shown.length) {
+              <div class="flex flex-wrap gap-1">
+                @for (n of inv.shown; track n) {
+                  <span class="chip chip-draft tabular">{{ n }}</span>
+                }
+                @if (inv.more > 0) {
+                  <span class="chip chip-draft tabular">+{{ inv.more }}</span>
+                }
+              </div>
+            } @else {
+              <span class="text-ink-3">—</span>
+            }
+          }
+        </td>
+        <td class="tabular text-right font-semibold text-ink">{{ row.amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td><app-chip [tone]="payableTone(row.status)" [label]="row.status_label" /></td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver detalle" (onClick)="goDetail(row)" />
+          @if (row.status === 'confirmado' && canDelete()) {
+            <p-button
+              icon="pi pi-ban"
+              [text]="true"
+              [rounded]="true"
+              severity="danger"
+              size="small"
+              pTooltip="Anular (revierte los abonos)"
+              [loading]="cancelling() === row.id"
+              [disabled]="cancelling() !== null"
+              (onClick)="cancelPayment(row)"
+            />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="9" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">payments</span>
+            <span class="text-sm">No hay pagos que coincidan con los filtros.</span>
+            @if (canCreate() && tab() === 'all' && !search()) {
+              <p-button label="Registrar el primer pago" icon="pi pi-plus" [text]="true" size="small" (onClick)="goCreate()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

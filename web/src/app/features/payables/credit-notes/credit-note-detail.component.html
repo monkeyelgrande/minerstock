@@ -1,0 +1,254 @@
+@if (doc(); as d) {
+  <app-page-header
+    [title]="d.number"
+    [subtitle]="(d.supplier?.name ?? '—') + (d.supplier?.document_number ? ' · NIT ' + d.supplier?.document_number : '')"
+    [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Notas crédito', route: '/pagos/notas-credito' }, { label: d.number }]"
+  >
+    <app-chip chip [tone]="payableTone(d.status)" [label]="d.status_label" />
+
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="cancelling()" (onClick)="cancelNote()" />
+    }
+    @if (showApply()) {
+      <p-button label="Aplicar a facturas" icon="pi pi-file-check" (onClick)="openApplyDialog()" />
+    }
+  </app-page-header>
+
+  @if (d.status === 'anulada') {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Nota crédito anulada</div>
+        <div class="text-ink-2 mt-0.5">El saldo a favor de esta nota no está disponible para aplicar a facturas.</div>
+      </div>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Aplicaciones</span>
+          <span class="text-xs text-ink-3">{{ applications().length }} aplicación(es)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[680px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5">Factura</th>
+                <th class="th-label text-left px-3 py-2.5 w-44">Fecha aplicación</th>
+                <th class="th-label text-right px-3 py-2.5 w-40">Valor</th>
+                <th class="th-label text-left px-3 py-2.5">Aplicada por</th>
+                <th class="th-label text-right px-3 py-2.5 w-20"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of applications(); track a.id) {
+                <tr class="border-b border-line last:border-b-0">
+                  <td class="px-5 py-3">
+                    @if (a.invoice) {
+                      <a class="doc-link" [routerLink]="['/pagos/facturas', a.invoice.id]">{{ a.invoice.number }}</a>
+                      <div class="text-xs text-ink-3 tabular">{{ a.invoice.supplier_invoice_number }}</div>
+                    } @else {
+                      <span class="text-ink-3">—</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">{{ a.applied_at | date: 'dd/MM/yyyy HH:mm' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink">{{ a.amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-ink-2">{{ a.applier?.name ?? '—' }}</td>
+                  <td class="px-3 py-3 text-right">
+                    @if (showRemove()) {
+                      <p-button
+                        icon="pi pi-times"
+                        [text]="true"
+                        [rounded]="true"
+                        severity="danger"
+                        size="small"
+                        pTooltip="Quitar (la factura recupera su saldo)"
+                        [loading]="removingId() === a.id"
+                        [disabled]="removingId() !== null"
+                        (onClick)="removeApplication(a)"
+                      />
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5" class="text-center py-10">
+                    <div class="flex flex-col items-center gap-2 text-ink-3">
+                      <span class="material-symbols-outlined !text-[36px]">credit_score</span>
+                      <span class="text-sm">Esta nota aún no se ha aplicado a ninguna factura.</span>
+                      @if (showApply()) {
+                        <p-button label="Aplicar a facturas" icon="pi pi-file-check" [text]="true" size="small" (onClick)="openApplyDialog()" />
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-end px-5 py-4 border-t border-line">
+          <dl class="grid grid-cols-[auto_minmax(150px,auto)] gap-x-8 gap-y-1 text-sm tabular">
+            <dt class="text-ink-2">Valor de la nota</dt>
+            <dd class="text-right text-ink">{{ d.amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            <dt class="text-ink-2">Aplicado</dt>
+            <dd class="text-right text-ink">{{ d.applied_amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            <dt class="text-base font-semibold text-ink pt-1 border-t border-line">Disponible</dt>
+            <dd class="text-right text-base font-semibold pt-1 border-t border-line" [class.text-[#065F46]]="d.available > 0" [class.text-ink]="d.available <= 0">
+              {{ d.available | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+            </dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">Origen</dt>
+          <dd class="text-right">
+            @if (origin(); as ret) {
+              <a class="doc-link" [routerLink]="['/inventario/devoluciones', ret.id]">{{ ret.number }}</a>
+              <div class="text-xs text-ink-3">Devolución a proveedor</div>
+            } @else {
+              <span class="text-ink">Manual</span>
+              @if (d.supplier_note_number) {
+                <div class="text-xs text-ink-3 tabular">N° proveedor {{ d.supplier_note_number }}</div>
+              }
+            }
+          </dd>
+          @if (origin() && d.supplier_note_number) {
+            <dt class="text-ink-3">N° nota proveedor</dt>
+            <dd class="text-ink text-right tabular">{{ d.supplier_note_number }}</dd>
+          }
+          <dt class="text-ink-3">Fecha</dt>
+          <dd class="text-ink text-right tabular">{{ d.date | date: 'dd/MM/yyyy' }}</dd>
+          <dt class="text-ink-3">Registrada por</dt>
+          <dd class="text-ink text-right">{{ d.creator?.name ?? '—' }}</dd>
+          @if (d.notes) {
+            <dt class="text-ink-3 col-span-2 pt-1 border-t border-line">Observaciones</dt>
+            <dd class="text-ink-2 col-span-2 whitespace-pre-line">{{ d.notes }}</dd>
+          }
+        </dl>
+      </div>
+
+      <app-attachments type="supplier_credit_note" [documentId]="d.id" [items]="d.attachments ?? []" [canEdit]="canUpdate()" (changed)="load()" />
+    </div>
+  </div>
+
+  <!-- ================= Diálogo: aplicar a facturas ================= -->
+  <p-dialog
+    [visible]="dialogOpen()"
+    (visibleChange)="dialogOpen.set($event)"
+    header="Aplicar a facturas"
+    [modal]="true"
+    [draggable]="false"
+    [resizable]="false"
+    [dismissableMask]="!applying()"
+    [closable]="!applying()"
+    [style]="{ width: '860px', maxWidth: '95vw' }"
+  >
+    <form [formGroup]="applyForm" (ngSubmit)="apply()" novalidate class="space-y-4">
+      @if (invoicesLoading()) {
+        <div class="text-center py-10 text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando facturas abiertas…</div>
+      } @else if (!applicationsArray.length) {
+        <div class="flex flex-col items-center gap-2 text-ink-3 py-10">
+          <span class="material-symbols-outlined !text-[36px]">task_alt</span>
+          <span class="text-sm">Este proveedor no tiene facturas pendientes.</span>
+        </div>
+      } @else {
+        <div class="overflow-x-auto -mx-1" formArrayName="applications">
+          <table class="w-full min-w-[720px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-center px-3 py-2.5 w-16">Aplicar</th>
+                <th class="th-label text-left px-3 py-2.5">Factura</th>
+                <th class="th-label text-left px-3 py-2.5 w-36">Vencimiento</th>
+                <th class="th-label text-right px-3 py-2.5 w-36">Saldo</th>
+                <th class="th-label text-right px-3 py-2.5 w-44">Valor a aplicar</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (g of applicationsArray.controls; track g; let i = $index) {
+                @if (meta()[i]; as m) {
+                  <tr [formGroupName]="i" class="border-b border-line last:border-b-0 align-top" [class.opacity-60]="!g.value.include">
+                    <td class="px-3 py-3 text-center">
+                      <p-checkbox formControlName="include" [binary]="true" [inputId]="'app_' + i" (onChange)="onIncludeChange(i, $event.checked)" />
+                    </td>
+                    <td class="px-3 py-3">
+                      <div class="text-sm font-medium text-ink tabular">{{ m.invoice.number }}</div>
+                      <div class="text-xs text-ink-3 tabular">{{ m.invoice.supplier_invoice_number }}</div>
+                    </td>
+                    <td class="px-3 py-3 text-sm tabular" [class.text-ink-2]="!m.invoice.is_overdue" [class.text-[#B91C1C]]="m.invoice.is_overdue">
+                      {{ m.invoice.due_date | date: 'dd/MM/yyyy' }}
+                      @if (m.invoice.is_overdue) {
+                        <app-chip tone="danger" label="Vencida" class="ml-1" />
+                      }
+                    </td>
+                    <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink pt-[1.05rem]">{{ m.balance | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                    <td class="px-3 py-3">
+                      <p-inputnumber
+                        formControlName="amount"
+                        mode="currency"
+                        currency="COP"
+                        locale="es-CO"
+                        [minFractionDigits]="0"
+                        [maxFractionDigits]="2"
+                        [min]="0"
+                        [max]="m.balance"
+                        placeholder="$ 0"
+                        styleClass="w-full"
+                        inputStyleClass="w-full tabular text-right"
+                      />
+                      @if (err('applications.' + i + '.amount'); as e) {
+                        <p class="field-error">{{ e }}</p>
+                      } @else if (showError(g, 'amount')) {
+                        <p class="field-error">Ingresa un valor entre $1 y el saldo de la factura.</p>
+                      }
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-line pt-3">
+          <div class="text-xs" [class.text-ink-3]="!overAvailable()" [class.text-[#B91C1C]]="overAvailable()">
+            @if (overAvailable()) {
+              El total a aplicar supera el disponible de la nota.
+            } @else {
+              El total a aplicar no puede superar el disponible de la nota.
+            }
+          </div>
+          <dl class="grid grid-cols-[auto_minmax(150px,auto)] gap-x-8 gap-y-1 text-sm tabular">
+            <dt class="text-ink-2">Total a aplicar</dt>
+            <dd class="text-right font-semibold" [class.text-ink]="!overAvailable()" [class.text-[#B91C1C]]="overAvailable()">
+              {{ totalToApply() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+            </dd>
+            <dt class="text-ink-2">Disponible</dt>
+            <dd class="text-right text-[#065F46] font-semibold">{{ available() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          </dl>
+        </div>
+      }
+
+      <div class="flex justify-end gap-2 pt-2">
+        <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="applying()" (onClick)="dialogOpen.set(false)" />
+        <p-button
+          label="Aplicar nota"
+          icon="pi pi-check"
+          type="submit"
+          [loading]="applying()"
+          [disabled]="invoicesLoading() || !applicationsArray.length || overAvailable()"
+        />
+      </div>
+    </form>
+  </p-dialog>
+} @else {
+  <app-page-header title="Nota crédito" [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Notas crédito', route: '/pagos/notas-credito' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando nota crédito…</div>
+}

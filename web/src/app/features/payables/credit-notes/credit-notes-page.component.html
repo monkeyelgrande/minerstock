@@ -1,0 +1,194 @@
+<app-page-header
+  title="Notas crédito"
+  subtitle="Saldos a favor con proveedores"
+  [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Notas crédito' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Nueva nota manual" icon="pi pi-plus" (onClick)="openDialog()" />
+  }
+</app-page-header>
+
+<!-- Pestañas por estado -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+    </button>
+  }
+</div>
+
+<app-crud-toolbar
+  [(search)]="search"
+  searchPlaceholder="Buscar por número, nota del proveedor o proveedor…"
+  [showActiveFilter]="false"
+  [createLabel]="null"
+>
+  <p-select
+    [options]="suppliers()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Proveedor"
+    [showClear]="true"
+    [filter]="suppliers().length > 8"
+    filterPlaceholder="Buscar proveedor…"
+    [ngModel]="supplierId()"
+    (ngModelChange)="setSupplier($event)"
+    styleClass="w-56"
+  />
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="date"
+    [sortOrder]="-1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="number" class="w-32">Número <p-sortIcon field="number" /></th>
+        <th>Proveedor</th>
+        <th pSortableColumn="date" class="w-32">Fecha <p-sortIcon field="date" /></th>
+        <th class="w-36">Origen</th>
+        <th pSortableColumn="amount" class="w-36 text-right">Valor <p-sortIcon field="amount" /></th>
+        <th class="w-36 text-right">Aplicado</th>
+        <th class="w-36 text-right">Disponible</th>
+        <th pSortableColumn="status" class="w-32">Estado <p-sortIcon field="status" /></th>
+        <th class="w-20 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/pagos/notas-credito', row.id]">{{ row.number }}</a>
+        </td>
+        <td>
+          <div class="text-ink font-medium">{{ row.supplier?.name ?? '—' }}</div>
+          @if (row.supplier?.document_number) {
+            <div class="text-xs text-ink-3 tabular">NIT {{ row.supplier.document_number }}</div>
+          }
+        </td>
+        <td class="tabular text-ink-2">{{ row.date | date: 'dd/MM/yyyy' }}</td>
+        <td>
+          @if (originOf(row); as ret) {
+            <a class="doc-link" [routerLink]="['/inventario/devoluciones', ret.id]">{{ ret.number }}</a>
+          } @else {
+            <span class="text-ink-2">Manual</span>
+          }
+        </td>
+        <td class="tabular text-right text-ink-2">{{ row.amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td class="tabular text-right text-ink-2">{{ row.applied_amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td class="tabular text-right font-semibold" [class.text-[#065F46]]="row.available > 0" [class.text-ink-2]="row.available <= 0">
+          {{ row.available | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+        </td>
+        <td><app-chip [tone]="payableTone(row.status)" [label]="row.status_label" /></td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver detalle" (onClick)="goDetail(row)" />
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="9" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">credit_score</span>
+            <span class="text-sm">No hay notas crédito que coincidan con los filtros.</span>
+            @if (canCreate() && tab() === 'all' && !search()) {
+              <p-button label="Registrar la primera nota manual" icon="pi pi-plus" [text]="true" size="small" (onClick)="openDialog()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<!-- ================= Diálogo: nueva nota manual ================= -->
+<p-dialog
+  [visible]="dialogOpen()"
+  (visibleChange)="dialogOpen.set($event)"
+  header="Nueva nota crédito manual"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!saving()"
+  [closable]="!saving()"
+  [style]="{ width: '560px', maxWidth: '95vw' }"
+>
+  <form [formGroup]="dialogForm" (ngSubmit)="createNote()" novalidate class="space-y-4">
+    <app-field label="Proveedor" [required]="true" [control]="dialogForm.controls.supplier_id" [serverError]="err('supplier_id')" [submitted]="submitted()">
+      <p-select
+        formControlName="supplier_id"
+        [options]="suppliers()"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Selecciona el proveedor"
+        [filter]="true"
+        filterBy="name,document_number"
+        filterPlaceholder="Buscar por nombre o NIT…"
+        appendTo="body"
+        styleClass="w-full"
+      >
+        <ng-template #item let-s>
+          <div class="flex flex-col leading-tight">
+            <span class="text-sm font-medium">{{ s.name }}</span>
+            <span class="text-xs text-ink-3 tabular">NIT {{ s.document_number }}</span>
+          </div>
+        </ng-template>
+      </p-select>
+    </app-field>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <app-field label="N° nota del proveedor" [control]="dialogForm.controls.supplier_note_number" [serverError]="err('supplier_note_number')" [submitted]="submitted()" hint="Opcional">
+        <input pInputText formControlName="supplier_note_number" class="w-full" placeholder="Ej. NC-2026-015" />
+      </app-field>
+      <app-field label="Fecha" [required]="true" [control]="dialogForm.controls.date" [serverError]="err('date')" [submitted]="submitted()">
+        <p-datepicker formControlName="date" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full" />
+      </app-field>
+    </div>
+
+    <app-field label="Valor" [required]="true" [control]="dialogForm.controls.amount" [serverError]="err('amount')" [submitted]="submitted()">
+      <p-inputnumber
+        formControlName="amount"
+        mode="currency"
+        currency="COP"
+        locale="es-CO"
+        [minFractionDigits]="0"
+        [maxFractionDigits]="2"
+        [min]="0"
+        placeholder="$ 0"
+        styleClass="w-full"
+        inputStyleClass="w-full tabular"
+      />
+    </app-field>
+
+    <app-field label="Observaciones" [control]="dialogForm.controls.notes" [serverError]="err('notes')" [submitted]="submitted()">
+      <textarea pTextarea formControlName="notes" rows="2" class="w-full" placeholder="Motivo de la nota, acuerdo con el proveedor, etc."></textarea>
+    </app-field>
+
+    <div class="flex justify-end gap-2 pt-2">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="dialogOpen.set(false)" />
+      <p-button label="Registrar nota" icon="pi pi-check" type="submit" [loading]="saving()" />
+    </div>
+  </form>
+</p-dialog>

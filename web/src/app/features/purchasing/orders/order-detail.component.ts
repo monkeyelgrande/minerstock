@@ -10,8 +10,10 @@ import { DialogModule } from 'primeng/dialog';
 import { TextareaModule } from 'primeng/textarea';
 import { TooltipModule } from 'primeng/tooltip';
 
+import { PayablesApi } from '../../../core/api/payables-api.service';
 import { PurchasingApi } from '../../../core/api/purchasing-api.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import { SupplierInvoice, payableTone } from '../../../core/models/payables.model';
 import { Approval, PurchaseOrder, PurchaseOrderItem, PurchaseOrderStatus, statusTone } from '../../../core/models/purchasing.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { AttachmentsComponent } from '../../../shared/components/attachments.component';
@@ -41,6 +43,7 @@ const FLOW: { key: PurchaseOrderStatus; label: string }[] = [
 ];
 
 const PDF_STATUSES: PurchaseOrderStatus[] = ['aprobada', 'emitida', 'recibida_parcial', 'recibida', 'cerrada'];
+const INVOICE_STATUSES: PurchaseOrderStatus[] = ['emitida', 'recibida_parcial', 'recibida', 'cerrada'];
 const CANCEL_STATUSES: PurchaseOrderStatus[] = ['borrador', 'pendiente_aprobacion', 'rechazada', 'aprobada', 'emitida'];
 const CLOSE_STATUSES: PurchaseOrderStatus[] = ['emitida', 'recibida_parcial', 'recibida'];
 
@@ -56,6 +59,7 @@ const CLOSE_STATUSES: PurchaseOrderStatus[] = ['emitida', 'recibida_parcial', 'r
 })
 export class OrderDetailComponent {
   private readonly api = inject(PurchasingApi);
+  private readonly payables = inject(PayablesApi);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmationService);
@@ -98,6 +102,13 @@ export class OrderDetailComponent {
   /** Recepción de mercancía (fase 2): la orden admite recepción y el usuario puede crearla. */
   readonly showReceive = computed(() => !!this.order()?.can_receive && this.auth.can('goods_receipts.create'));
   readonly receipts = computed(() => this.order()?.receipts ?? []);
+
+  /** Facturas de proveedor (fase 3) asociadas a la orden. */
+  readonly invoices = signal<SupplierInvoice[]>([]);
+  readonly canViewInvoices = computed(() => this.auth.can('supplier_invoices.view'));
+  readonly showInvoice = computed(
+    () => !!this.status() && INVOICE_STATUSES.includes(this.status()!) && this.auth.can('supplier_invoices.create'),
+  );
 
   /** Pasos del stepper con su estado (hecho / actual / pendiente). */
   readonly steps = computed<Step[]>(() => {
@@ -183,11 +194,24 @@ export class OrderDetailComponent {
         next: (o) => {
           this.order.set(o);
           this.loading.set(false);
+          this.loadInvoices(o.id);
         },
         error: () => {
           this.loading.set(false);
           void this.router.navigate(['/compras/ordenes']);
         },
+      });
+  }
+
+  /** Facturas de proveedor ligadas a la orden (solo si el usuario puede verlas). */
+  private loadInvoices(orderId: number): void {
+    if (!this.canViewInvoices()) return;
+    this.payables
+      .invoices({ purchase_order_id: orderId, per_page: 50 })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => this.invoices.set(res.data),
+        error: () => this.invoices.set([]),
       });
   }
 
@@ -201,6 +225,11 @@ export class OrderDetailComponent {
   goReceive(): void {
     const o = this.order();
     if (o) void this.router.navigate(['/inventario/recepciones/nueva'], { queryParams: { order: o.id } });
+  }
+
+  goInvoice(): void {
+    const o = this.order();
+    if (o) void this.router.navigate(['/pagos/facturas/nueva'], { queryParams: { order: o.id } });
   }
 
   submit(): void {
@@ -338,6 +367,7 @@ export class OrderDetailComponent {
   }
 
   statusTone = statusTone;
+  payableTone = payableTone;
 
   /** Tono del chip de una recepción (borrador / confirmado / anulado). */
   receiptTone(status: string): 'draft' | 'success' | 'danger' {

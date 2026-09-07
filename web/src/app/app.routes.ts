@@ -33,6 +33,11 @@ export const routes: Routes = [
         loadChildren: () => import('./features/inventory/inventory.routes').then((m) => m.INVENTORY_ROUTES),
       },
       {
+        path: 'pagos',
+        canActivateChild: [permissionGuard],
+        loadChildren: () => import('./features/payables/payables.routes').then((m) => m.PAYABLES_ROUTES),
+      },
+      {
         path: 'catalogo',
         canActivateChild: [permissionGuard],
         loadChildren: () => import('./features/catalog/catalog.routes').then((m) => m.CATALOG_ROUTES),

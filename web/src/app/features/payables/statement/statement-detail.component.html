@@ -1,0 +1,209 @@
+@if (data(); as d) {
+  <app-page-header
+    [title]="d.supplier.name"
+    [subtitle]="subtitle()"
+    [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Estado de cuenta', route: '/pagos/estado-cuenta' }, { label: d.supplier.name }]"
+  >
+    @if (canCreateInvoice()) {
+      <p-button label="Registrar factura" icon="pi pi-file-plus" severity="secondary" [outlined]="true" (onClick)="goNewInvoice()" />
+    }
+    @if (canCreatePayment()) {
+      <p-button label="Registrar pago" icon="pi pi-plus" (onClick)="goNewPayment()" />
+    }
+  </app-page-header>
+
+  <!-- ================= KPIs ================= -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
+    <div class="card card-body">
+      <div class="th-label">Saldo</div>
+      <div class="text-2xl font-bold text-ink tabular mt-1">{{ d.totals.balance | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+      <div class="text-xs text-ink-3 mt-0.5">{{ terms() }}</div>
+    </div>
+    <div class="card card-body">
+      <div class="th-label">Vencido</div>
+      <div class="text-2xl font-bold tabular mt-1" [class.text-[#B91C1C]]="d.totals.overdue_balance > 0" [class.text-ink]="d.totals.overdue_balance <= 0">
+        {{ d.totals.overdue_balance | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+      </div>
+      <div class="text-xs text-ink-3 mt-0.5">Con vencimiento cumplido</div>
+    </div>
+    <div class="card card-body">
+      <div class="th-label">Facturas abiertas</div>
+      <div class="text-2xl font-bold text-ink tabular mt-1">{{ d.totals.open_count }}</div>
+      <div class="text-xs text-ink-3 mt-0.5">Pendientes o parciales</div>
+    </div>
+    <div class="card card-body">
+      <div class="th-label">Crédito disponible</div>
+      <div class="text-2xl font-bold text-[#065F46] tabular mt-1">{{ d.totals.available_credit | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+      <div class="text-xs text-ink-3 mt-0.5">Notas crédito por aplicar</div>
+    </div>
+  </div>
+
+  <!-- ================= Pestañas ================= -->
+  <p-tabs [value]="tab()" (valueChange)="onTabChange($event)">
+    <p-tablist>
+      <p-tab value="facturas">Facturas</p-tab>
+      <p-tab value="pagos">Pagos</p-tab>
+      <p-tab value="notas">Notas crédito</p-tab>
+    </p-tablist>
+
+    <p-tabpanels class="!bg-transparent !p-0 !pt-4">
+      <!-- ================= Facturas ================= -->
+      <p-tabpanel value="facturas">
+        <div class="card overflow-x-auto">
+          <table class="w-full min-w-[1080px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5 w-32">Número</th>
+                <th class="th-label text-left px-3 py-2.5">N° proveedor</th>
+                <th class="th-label text-left px-3 py-2.5 w-28">OC</th>
+                <th class="th-label text-left px-3 py-2.5 w-28">Emisión</th>
+                <th class="th-label text-left px-3 py-2.5 w-40">Vencimiento</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Total</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Pagado</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Notas</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Saldo</th>
+                <th class="th-label text-left px-3 py-2.5 w-28">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (inv of d.invoices; track inv.id) {
+                <tr class="border-b border-line last:border-b-0">
+                  <td class="px-5 py-3"><a class="doc-link" [routerLink]="['/pagos/facturas', inv.id]">{{ inv.number }}</a></td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">{{ inv.supplier_invoice_number || '—' }}</td>
+                  <td class="px-3 py-3 text-sm">
+                    @if (inv.order) {
+                      <a class="doc-link" [routerLink]="['/compras/ordenes', inv.order.id]">{{ inv.order.number ?? '—' }}</a>
+                    } @else {
+                      <span class="text-ink-3">—</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">{{ inv.issue_date | date: 'dd/MM/yyyy' }}</td>
+                  <td class="px-3 py-3 text-sm tabular" [class.text-ink-2]="!inv.is_overdue" [class.text-[#B91C1C]]="inv.is_overdue">
+                    {{ inv.due_date | date: 'dd/MM/yyyy' }}
+                    @if (inv.is_overdue) {
+                      <app-chip tone="danger" label="Vencida" class="ml-1" />
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ inv.total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ inv.paid_amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ inv.credited_amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-semibold text-ink">{{ inv.balance | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3"><app-chip [tone]="payableTone(inv.status)" [label]="inv.status_label" /></td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="10" class="text-center py-12">
+                    <div class="flex flex-col items-center gap-2 text-ink-3">
+                      <span class="material-symbols-outlined !text-[36px]">receipt_long</span>
+                      <span class="text-sm">Este proveedor no tiene facturas registradas.</span>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </p-tabpanel>
+
+      <!-- ================= Pagos ================= -->
+      <p-tabpanel value="pagos">
+        <div class="card overflow-x-auto">
+          <table class="w-full min-w-[900px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5 w-32">Número</th>
+                <th class="th-label text-left px-3 py-2.5 w-28">Fecha</th>
+                <th class="th-label text-left px-3 py-2.5 w-36">Medio</th>
+                <th class="th-label text-left px-3 py-2.5 w-40">Referencia</th>
+                <th class="th-label text-left px-3 py-2.5">Facturas</th>
+                <th class="th-label text-right px-3 py-2.5 w-36">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (p of d.payments; track p.id) {
+                <tr class="border-b border-line last:border-b-0" [class.opacity-60]="p.status === 'anulado'">
+                  <td class="px-5 py-3">
+                    <a class="doc-link" [routerLink]="['/pagos/pagos', p.id]">{{ p.number }}</a>
+                    @if (p.status === 'anulado') {
+                      <app-chip tone="danger" label="Anulado" class="ml-1" />
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">{{ p.date | date: 'dd/MM/yyyy' }}</td>
+                  <td class="px-3 py-3 text-sm text-ink-2">{{ p.method_label }}</td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">{{ p.reference || '—' }}</td>
+                  <td class="px-3 py-3">
+                    @if (paymentInvoices(p).length) {
+                      <div class="flex flex-wrap gap-1">
+                        @for (n of paymentInvoices(p); track n) {
+                          <span class="chip chip-draft tabular">{{ n }}</span>
+                        }
+                      </div>
+                    } @else {
+                      <span class="text-ink-3">—</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-semibold text-ink">{{ p.amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="6" class="text-center py-12">
+                    <div class="flex flex-col items-center gap-2 text-ink-3">
+                      <span class="material-symbols-outlined !text-[36px]">payments</span>
+                      <span class="text-sm">Este proveedor no tiene pagos registrados.</span>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </p-tabpanel>
+
+      <!-- ================= Notas crédito ================= -->
+      <p-tabpanel value="notas">
+        <div class="card overflow-x-auto">
+          <table class="w-full min-w-[900px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5 w-32">Número</th>
+                <th class="th-label text-left px-3 py-2.5 w-28">Fecha</th>
+                <th class="th-label text-left px-3 py-2.5 w-36">Origen</th>
+                <th class="th-label text-right px-3 py-2.5 w-36">Valor</th>
+                <th class="th-label text-right px-3 py-2.5 w-36">Aplicado</th>
+                <th class="th-label text-right px-3 py-2.5 w-36">Disponible</th>
+                <th class="th-label text-left px-3 py-2.5 w-28">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (n of d.credit_notes; track n.id) {
+                <tr class="border-b border-line last:border-b-0" [class.opacity-60]="n.status === 'anulada'">
+                  <td class="px-5 py-3"><a class="doc-link" [routerLink]="['/pagos/notas-credito', n.id]">{{ n.number }}</a></td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">{{ n.date | date: 'dd/MM/yyyy' }}</td>
+                  <td class="px-3 py-3 text-sm text-ink-2">{{ n.return_number ? 'Devolución ' + n.return_number : 'Manual' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ n.amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ n.applied_amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-semibold" [class.text-[#065F46]]="n.available > 0" [class.text-ink-2]="n.available <= 0">
+                    {{ n.available | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+                  </td>
+                  <td class="px-3 py-3"><app-chip [tone]="payableTone(n.status)" [label]="n.status_label" /></td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" class="text-center py-12">
+                    <div class="flex flex-col items-center gap-2 text-ink-3">
+                      <span class="material-symbols-outlined !text-[36px]">credit_score</span>
+                      <span class="text-sm">Este proveedor no tiene notas crédito.</span>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </p-tabpanel>
+    </p-tabpanels>
+  </p-tabs>
+} @else {
+  <app-page-header title="Estado de cuenta" [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Estado de cuenta', route: '/pagos/estado-cuenta' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando estado de cuenta…</div>
+}

@@ -8,6 +8,8 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\Quotation;
 use App\Models\StockCount;
+use App\Models\SupplierCreditNote;
+use App\Models\SupplierInvoice;
 use App\Services\Inventory\StockQueryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -71,6 +73,18 @@ class DashboardController extends Controller
             $data['approvals_pending'] = [
                 'purchase_requests' => PurchaseRequest::query()->where('status', 'enviada')->count(),
                 'purchase_orders' => PurchaseOrder::query()->where('status', 'pendiente_aprobacion')->count(),
+            ];
+        }
+
+        if ($user->can('supplier_invoices.view')) {
+            $open = SupplierInvoice::query()->whereIn('status', ['pendiente', 'parcial'])->get(['total', 'paid_amount', 'credited_amount', 'due_date', 'status']);
+            $data['payables'] = [
+                'open_count' => $open->count(),
+                'open_balance' => round((float) $open->sum(fn ($i) => $i->balance()), 2),
+                'overdue_count' => $open->filter(fn ($i) => $i->isOverdue())->count(),
+                'overdue_balance' => round((float) $open->filter(fn ($i) => $i->isOverdue())->sum(fn ($i) => $i->balance()), 2),
+                'due_soon_balance' => round((float) $open->filter(fn ($i) => ! $i->isOverdue() && $i->due_date !== null && $i->due_date->lte(today()->addDays(7)))->sum(fn ($i) => $i->balance()), 2),
+                'available_credit' => round((float) SupplierCreditNote::query()->where('status', 'disponible')->get(['amount', 'applied_amount'])->sum(fn ($n) => $n->availableAmount()), 2),
             ];
         }
 

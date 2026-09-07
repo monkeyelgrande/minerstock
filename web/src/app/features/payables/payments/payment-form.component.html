@@ -1,0 +1,172 @@
+<app-page-header
+  title="Registrar pago"
+  subtitle="Registra un pago a proveedor y aplícalo a sus facturas abiertas"
+  [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Pagos a proveedores', route: '/pagos/pagos' }, { label: 'Nuevo' }]"
+>
+  <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancel()" />
+  <p-button label="Registrar pago" icon="pi pi-check-circle" [loading]="saving()" (onClick)="save()" />
+</app-page-header>
+
+@if (formError(); as e) {
+  <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+    <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">error</span>
+    <div>
+      <div class="font-semibold text-[#B91C1C]">No se pudo registrar el pago</div>
+      <div class="text-ink-2 mt-0.5">{{ e }}</div>
+    </div>
+  </div>
+}
+
+<form [formGroup]="form" (ngSubmit)="save()" novalidate class="space-y-4">
+  <!-- ================= Datos del pago ================= -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Datos del pago</span></div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <app-field label="Proveedor" [required]="true" [control]="form.controls.supplier_id" [serverError]="err('supplier_id')" [submitted]="submitted()">
+        <p-select
+          formControlName="supplier_id"
+          [options]="suppliers()"
+          optionLabel="name"
+          optionValue="id"
+          placeholder="Selecciona el proveedor"
+          [filter]="true"
+          filterBy="name,document_number"
+          filterPlaceholder="Buscar por nombre o NIT…"
+          [showClear]="true"
+          appendTo="body"
+          styleClass="w-full"
+          emptyMessage="No hay proveedores."
+          (onChange)="onSupplierChange($event.value)"
+        >
+          <ng-template #item let-s>
+            <div class="flex flex-col leading-tight">
+              <span class="text-sm font-medium">{{ s.name }}</span>
+              <span class="text-xs text-ink-3 tabular">NIT {{ s.document_number }}</span>
+            </div>
+          </ng-template>
+        </p-select>
+      </app-field>
+      <app-field label="Fecha" [required]="true" [control]="form.controls.date" [serverError]="err('date')" [submitted]="submitted()">
+        <p-datepicker formControlName="date" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full" />
+      </app-field>
+      <app-field label="Medio de pago" [required]="true" [control]="form.controls.method" [serverError]="err('method')" [submitted]="submitted()">
+        <p-select formControlName="method" [options]="methods()" optionLabel="label" optionValue="value" placeholder="Selecciona el medio" appendTo="body" styleClass="w-full" />
+      </app-field>
+      <app-field label="Referencia" [control]="form.controls.reference" [serverError]="err('reference')" [submitted]="submitted()" hint="N° de transferencia o cheque">
+        <input pInputText formControlName="reference" class="w-full" placeholder="Ej. TRF-00123" />
+      </app-field>
+      <div class="md:col-span-2 xl:col-span-4">
+        <app-field label="Observaciones" [control]="form.controls.notes" [serverError]="err('notes')" [submitted]="submitted()">
+          <textarea pTextarea formControlName="notes" rows="2" class="w-full" placeholder="Detalle del pago, acuerdo con el proveedor, etc."></textarea>
+        </app-field>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Aplicar a facturas ================= -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Aplicar a facturas</div>
+        <p class="text-xs text-ink-3 mt-0.5">Marca las facturas que abona este pago e indica el valor a aplicar en cada una.</p>
+      </div>
+      @if (allocationsArray.length) {
+        <span class="text-xs text-ink-3 tabular">{{ includedCount() }} de {{ allocationsArray.length }} factura(s) marcada(s)</span>
+      }
+    </div>
+
+    @if (invoicesLoading()) {
+      <div class="card-body text-center py-10 text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando facturas abiertas…</div>
+    } @else if (!form.controls.supplier_id.value) {
+      <div class="card-body text-center py-10">
+        <div class="flex flex-col items-center gap-2 text-ink-3">
+          <span class="material-symbols-outlined !text-[36px]">receipt_long</span>
+          <span class="text-sm">Selecciona un proveedor para cargar sus facturas pendientes.</span>
+          @if (submitted()) {
+            <span class="field-error">El pago necesita al menos una factura.</span>
+          }
+        </div>
+      </div>
+    } @else if (!allocationsArray.length) {
+      <div class="card-body text-center py-10">
+        <div class="flex flex-col items-center gap-2 text-ink-3">
+          <span class="material-symbols-outlined !text-[36px]">task_alt</span>
+          <span class="text-sm">Este proveedor no tiene facturas pendientes.</span>
+        </div>
+      </div>
+    } @else {
+      <div class="overflow-x-auto" formArrayName="allocations">
+        <table class="w-full min-w-[900px]">
+          <thead>
+            <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+              <th class="th-label text-center px-3 py-2.5 w-16">Pagar</th>
+              <th class="th-label text-left px-3 py-2.5 w-32">Número</th>
+              <th class="th-label text-left px-3 py-2.5 min-w-[140px]">N° proveedor</th>
+              <th class="th-label text-left px-3 py-2.5 w-40">Vencimiento</th>
+              <th class="th-label text-right px-3 py-2.5 w-36">Total</th>
+              <th class="th-label text-right px-3 py-2.5 w-36">Saldo</th>
+              <th class="th-label text-right px-3 py-2.5 w-44">Valor a aplicar</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of allocationsArray.controls; track g; let i = $index) {
+              @if (meta()[i]; as m) {
+                <tr [formGroupName]="i" class="border-b border-line last:border-b-0 align-top" [class.opacity-60]="!g.value.include">
+                  <td class="px-3 py-3 text-center">
+                    <p-checkbox formControlName="include" [binary]="true" [inputId]="'alloc_' + i" (onChange)="onIncludeChange(i, $event.checked)" />
+                  </td>
+                  <td class="px-3 py-3 text-sm font-medium text-ink tabular">{{ m.invoice.number }}</td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">{{ m.invoice.supplier_invoice_number || '—' }}</td>
+                  <td class="px-3 py-3 text-sm tabular" [class.text-ink-2]="!m.invoice.is_overdue" [class.text-[#B91C1C]]="m.invoice.is_overdue">
+                    {{ m.invoice.due_date | date: 'dd/MM/yyyy' }}
+                    @if (m.invoice.is_overdue) {
+                      <app-chip tone="danger" label="Vencida" class="ml-1" />
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2 pt-[1.05rem]">{{ m.invoice.total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink pt-[1.05rem]">{{ m.balance | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3">
+                    <p-inputnumber
+                      formControlName="amount"
+                      mode="currency"
+                      currency="COP"
+                      locale="es-CO"
+                      [minFractionDigits]="0"
+                      [maxFractionDigits]="2"
+                      [min]="0"
+                      [max]="m.balance"
+                      placeholder="$ 0"
+                      styleClass="w-full"
+                      inputStyleClass="w-full tabular text-right"
+                    />
+                    @if (err('allocations.' + i + '.amount'); as e) {
+                      <p class="field-error">{{ e }}</p>
+                    } @else if (rowError(i); as e) {
+                      <p class="field-error">{{ e }}</p>
+                    } @else if (showError(g, 'amount')) {
+                      <p class="field-error">Ingresa un valor entre $1 y el saldo de la factura.</p>
+                    }
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-4 border-t border-line">
+        <div class="text-xs text-ink-3">El valor del pago es igual a la suma de los valores aplicados a las facturas.</div>
+        <dl class="grid grid-cols-[auto_minmax(160px,auto)] gap-x-8 gap-y-1 text-sm tabular min-w-[260px]">
+          <dt class="text-ink-2">Total aplicado</dt>
+          <dd class="text-right text-ink">{{ totalApplied() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          <dt class="text-lg font-semibold text-ink pt-1 border-t border-line">Valor del pago</dt>
+          <dd class="text-right text-lg font-bold text-ink pt-1 border-t border-line">{{ totalApplied() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+        </dl>
+      </div>
+    }
+  </div>
+
+  <div class="flex justify-end gap-2 pb-8">
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancel()" />
+    <p-button label="Registrar pago" icon="pi pi-check-circle" type="submit" [loading]="saving()" />
+  </div>
+</form>

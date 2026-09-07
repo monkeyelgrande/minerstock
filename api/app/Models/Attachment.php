@@ -19,6 +19,9 @@ class Attachment extends Model
         'goods_receipt' => GoodsReceipt::class,
         'supplier_return' => SupplierReturn::class,
         'adjustment' => Adjustment::class,
+        'supplier_invoice' => SupplierInvoice::class,
+        'supplier_payment' => SupplierPayment::class,
+        'supplier_credit_note' => SupplierCreditNote::class,
     ];
 
     public function attachable(): MorphTo

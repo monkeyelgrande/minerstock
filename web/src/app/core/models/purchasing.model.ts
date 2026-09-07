@@ -36,7 +36,16 @@ export interface Attachment {
   created_at: string;
 }
 
-export type AttachableType = 'purchase_request' | 'quotation' | 'purchase_order' | 'goods_receipt' | 'supplier_return' | 'adjustment';
+export type AttachableType =
+  | 'purchase_request'
+  | 'quotation'
+  | 'purchase_order'
+  | 'goods_receipt'
+  | 'supplier_return'
+  | 'adjustment'
+  | 'supplier_invoice'
+  | 'supplier_payment'
+  | 'supplier_credit_note';
 
 // ---------- Solicitudes de compra ----------
 export interface PurchaseRequestItem {

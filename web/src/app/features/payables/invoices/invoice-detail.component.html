@@ -1,0 +1,242 @@
+@if (invoice(); as inv) {
+  <app-page-header
+    [title]="inv.number"
+    [subtitle]="(inv.supplier?.name ?? '—') + (inv.supplier?.document_number ? ' · NIT ' + inv.supplier?.document_number : '')"
+    [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Facturas de proveedor', route: '/pagos/facturas' }, { label: inv.number }]"
+  >
+    <app-chip chip [tone]="payableTone(inv.status)" [label]="inv.status_label" />
+
+    @if (showEdit()) {
+      <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [outlined]="true" [disabled]="cancelling()" (onClick)="goEdit()" />
+    }
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="cancelling()" (onClick)="cancelInvoice()" />
+    }
+    @if (showPay()) {
+      <p-button label="Registrar pago" icon="pi pi-wallet" [disabled]="cancelling()" (onClick)="goPay()" />
+    }
+  </app-page-header>
+
+  <!-- ================= Banda de estado ================= -->
+  @if (inv.status === 'anulada') {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Factura anulada</div>
+        <div class="text-ink-2 mt-0.5">Esta factura no genera saldo por pagar; sus recepciones quedaron disponibles para facturar de nuevo.</div>
+      </div>
+    </div>
+  } @else if (inv.is_overdue) {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">event_busy</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Vencida el {{ inv.due_date | date: 'dd/MM/yyyy' }}</div>
+        <div class="text-ink-2 mt-0.5">La factura tiene saldo pendiente y su fecha de vencimiento ya pasó.</div>
+      </div>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Valores</span></div>
+        <div class="card-body">
+          <dl class="grid grid-cols-[1fr_auto] gap-x-8 gap-y-2 text-sm tabular max-w-md ml-auto">
+            <dt class="text-ink-3">Subtotal</dt>
+            <dd class="text-right text-ink">{{ inv.subtotal | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            <dt class="text-ink-3">IVA</dt>
+            <dd class="text-right text-ink">{{ inv.tax | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            <dt class="text-ink-3">Retención</dt>
+            <dd class="text-right" [class.text-ink]="!inv.withholding" [class.text-red-600]="inv.withholding > 0">
+              @if (inv.withholding > 0) { −{{ inv.withholding | currency: 'COP' : 'symbol-narrow' : '1.0-0' }} } @else { {{ 0 | currency: 'COP' : 'symbol-narrow' : '1.0-0' }} }
+            </dd>
+            <dt class="font-semibold text-ink pt-2 border-t border-line">Total</dt>
+            <dd class="text-right font-semibold text-ink pt-2 border-t border-line">{{ inv.total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            <dt class="text-ink-3">Pagado</dt>
+            <dd class="text-right" [class.text-ink-2]="!inv.paid_amount" [class.text-emerald-600]="inv.paid_amount > 0">
+              @if (inv.paid_amount > 0) { −{{ inv.paid_amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }} } @else { {{ 0 | currency: 'COP' : 'symbol-narrow' : '1.0-0' }} }
+            </dd>
+            <dt class="text-ink-3">Notas crédito</dt>
+            <dd class="text-right" [class.text-ink-2]="!inv.credited_amount" [class.text-emerald-600]="inv.credited_amount > 0">
+              @if (inv.credited_amount > 0) { −{{ inv.credited_amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }} } @else { {{ 0 | currency: 'COP' : 'symbol-narrow' : '1.0-0' }} }
+            </dd>
+            <dt class="text-base font-bold text-ink pt-2 border-t border-line">Saldo</dt>
+            <dd class="text-right text-base font-bold pt-2 border-t border-line" [class.text-emerald-600]="inv.status === 'pagada'" [class.text-ink]="inv.status !== 'pagada'">
+              {{ inv.balance | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+            </dd>
+          </dl>
+          @if (inv.notes) {
+            <div class="mt-4 pt-3 border-t border-line text-sm">
+              <div class="th-label mb-1">Observaciones</div>
+              <p class="text-ink-2 whitespace-pre-line">{{ inv.notes }}</p>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Recepciones</span>
+          @if (receipts().length) {
+            <span class="text-xs text-ink-3">{{ receipts().length }} recepción(es)</span>
+          }
+        </div>
+        @if (receipts().length) {
+          <ul class="divide-y divide-line">
+            @for (r of receipts(); track r.id) {
+              <li class="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+                <div class="min-w-0">
+                  <a class="doc-link" [routerLink]="['/inventario/recepciones', r.id]">{{ r.number }}</a>
+                  <div class="text-xs text-ink-3 tabular truncate">
+                    {{ r.received_at | date: 'dd/MM/yyyy' }}
+                    @if (r.supplier_remission) { · Remisión {{ r.supplier_remission }} }
+                  </div>
+                </div>
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+            <span class="material-symbols-outlined !text-[20px]">inventory</span>
+            Factura sin recepciones asociadas (compra menor).
+          </div>
+        }
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Pagos aplicados</span>
+          @if (payments().length) {
+            <span class="text-xs text-ink-3">{{ payments().length }} pago(s)</span>
+          }
+        </div>
+        @if (payments().length) {
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                  <th class="th-label text-left px-5 py-2.5 w-32">Número</th>
+                  <th class="th-label text-left px-3 py-2.5 w-32">Fecha</th>
+                  <th class="th-label text-left px-3 py-2.5">Medio</th>
+                  <th class="th-label text-right px-5 py-2.5 w-40">Valor aplicado</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (p of payments(); track p.id) {
+                  <tr class="border-b border-line last:border-b-0" [class.opacity-50]="p.payment?.status === 'anulado'">
+                    <td class="px-5 py-3">
+                      @if (p.payment) {
+                        <a class="doc-link" [routerLink]="['/pagos/pagos', p.payment.id]">{{ p.payment.number }}</a>
+                        @if (p.payment.status === 'anulado') {
+                          <span class="chip chip-danger ml-2">Anulado</span>
+                        }
+                      } @else {
+                        <span class="text-ink-3">—</span>
+                      }
+                    </td>
+                    <td class="px-3 py-3 text-sm tabular text-ink-2">{{ p.payment?.date | date: 'dd/MM/yyyy' }}</td>
+                    <td class="px-3 py-3 text-sm text-ink-2">{{ methodLabel(p.payment?.method) }}</td>
+                    <td class="px-5 py-3 text-sm text-right tabular font-medium text-ink">{{ p.amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+            <span class="material-symbols-outlined !text-[20px]">payments</span>
+            @if (showPay()) {
+              Sin pagos registrados. Puedes registrar uno con "Registrar pago".
+            } @else {
+              Sin pagos registrados.
+            }
+          </div>
+        }
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Notas crédito aplicadas</span>
+          @if (creditApplications().length) {
+            <span class="text-xs text-ink-3">{{ creditApplications().length }} aplicación(es)</span>
+          }
+        </div>
+        @if (creditApplications().length) {
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                  <th class="th-label text-left px-5 py-2.5 w-32">Número</th>
+                  <th class="th-label text-left px-3 py-2.5 w-32">Fecha</th>
+                  <th class="th-label text-right px-5 py-2.5">Valor aplicado</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (c of creditApplications(); track c.id) {
+                  <tr class="border-b border-line last:border-b-0">
+                    <td class="px-5 py-3">
+                      @if (c.note) {
+                        <a class="doc-link" [routerLink]="['/pagos/notas-credito', c.note.id]">{{ c.note.number }}</a>
+                      } @else {
+                        <span class="text-ink-3">—</span>
+                      }
+                    </td>
+                    <td class="px-3 py-3 text-sm tabular text-ink-2">{{ c.note?.date | date: 'dd/MM/yyyy' }}</td>
+                    <td class="px-5 py-3 text-sm text-right tabular font-medium text-ink">{{ c.amount | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+            <span class="material-symbols-outlined !text-[20px]">receipt</span>
+            Sin notas crédito aplicadas a esta factura.
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">N° proveedor</dt>
+          <dd class="text-ink text-right tabular">{{ inv.supplier_invoice_number }}</dd>
+          <dt class="text-ink-3">Orden de compra</dt>
+          <dd class="text-right">
+            @if (inv.order) {
+              <a class="doc-link" [routerLink]="['/compras/ordenes', inv.order.id]">{{ inv.order.number }}</a>
+            } @else {
+              <span class="text-ink-3">—</span>
+            }
+          </dd>
+          <dt class="text-ink-3">Emisión</dt>
+          <dd class="text-ink text-right tabular">{{ inv.issue_date | date: 'dd/MM/yyyy' }}</dd>
+          <dt class="text-ink-3">Vencimiento</dt>
+          <dd class="text-right tabular" [class.text-ink]="!inv.is_overdue" [class.text-red-600]="inv.is_overdue" [class.font-semibold]="inv.is_overdue">
+            {{ inv.due_date | date: 'dd/MM/yyyy' }}
+          </dd>
+          <dt class="text-ink-3">Condición</dt>
+          <dd class="text-right" [class.text-ink]="!inv.is_overdue" [class.text-red-600]="inv.is_overdue">{{ dueLabel() }}</dd>
+          <dt class="text-ink-3">Registrada por</dt>
+          <dd class="text-ink text-right">{{ inv.creator?.name ?? '—' }}</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body">
+          <app-timeline [events]="timeline()" />
+        </div>
+      </div>
+
+      <app-attachments [type]="attachType" [documentId]="inv.id" [items]="inv.attachments ?? []" [canEdit]="canUpdate()" title="Adjuntos" (changed)="load()" />
+    </div>
+  </div>
+} @else {
+  <app-page-header title="Factura de proveedor" [crumbs]="[{ label: 'Cuentas por pagar' }, { label: 'Facturas de proveedor', route: '/pagos/facturas' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando factura…</div>
+}

@@ -22,6 +22,10 @@ use App\Http\Controllers\Api\Inventory\GoodsReceiptController;
 use App\Http\Controllers\Api\Inventory\StockController;
 use App\Http\Controllers\Api\Inventory\StockCountController;
 use App\Http\Controllers\Api\Inventory\SupplierReturnController;
+use App\Http\Controllers\Api\Payables\CreditNoteController;
+use App\Http\Controllers\Api\Payables\StatementController;
+use App\Http\Controllers\Api\Payables\SupplierInvoiceController;
+use App\Http\Controllers\Api\Payables\SupplierPaymentController;
 use App\Http\Controllers\Api\Purchasing\ApprovalController;
 use App\Http\Controllers\Api\Purchasing\ComparisonController;
 use App\Http\Controllers\Api\Purchasing\PurchaseOrderController;
@@ -171,6 +175,37 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('stock-counts/{id}/record', [StockCountController::class, 'record'])->middleware('permission:stock_counts.update');
         Route::post('stock-counts/{id}/close', [StockCountController::class, 'close'])->middleware('permission:stock_counts.update');
         Route::post('stock-counts/{id}/cancel', [StockCountController::class, 'cancel'])->middleware('permission:stock_counts.delete');
+    });
+
+    // Cuentas por pagar
+    Route::prefix('payables')->name('payables.')->group(function () {
+        // Facturas de proveedor
+        Route::get('invoices', [SupplierInvoiceController::class, 'index'])->middleware('permission:supplier_invoices.view');
+        Route::get('invoices/counts', [SupplierInvoiceController::class, 'counts'])->middleware('permission:supplier_invoices.view');
+        Route::get('invoices/invoiceable-receipts', [SupplierInvoiceController::class, 'invoiceableReceipts'])->middleware('permission:supplier_invoices.view');
+        Route::get('invoices/{id}', [SupplierInvoiceController::class, 'show'])->middleware('permission:supplier_invoices.view');
+        Route::post('invoices', [SupplierInvoiceController::class, 'store'])->middleware('permission:supplier_invoices.create');
+        Route::put('invoices/{id}', [SupplierInvoiceController::class, 'update'])->middleware('permission:supplier_invoices.update');
+        Route::post('invoices/{id}/cancel', [SupplierInvoiceController::class, 'cancel'])->middleware('permission:supplier_invoices.delete');
+
+        // Pagos
+        Route::get('payments', [SupplierPaymentController::class, 'index'])->middleware('permission:supplier_payments.view');
+        Route::get('payments/methods', [SupplierPaymentController::class, 'methods'])->middleware('permission:supplier_payments.view');
+        Route::get('payments/{id}', [SupplierPaymentController::class, 'show'])->middleware('permission:supplier_payments.view');
+        Route::post('payments', [SupplierPaymentController::class, 'store'])->middleware('permission:supplier_payments.create');
+        Route::post('payments/{id}/cancel', [SupplierPaymentController::class, 'cancel'])->middleware('permission:supplier_payments.delete');
+
+        // Notas crédito
+        Route::get('credit-notes', [CreditNoteController::class, 'index'])->middleware('permission:supplier_credit_notes.view');
+        Route::get('credit-notes/{id}', [CreditNoteController::class, 'show'])->middleware('permission:supplier_credit_notes.view');
+        Route::post('credit-notes', [CreditNoteController::class, 'store'])->middleware('permission:supplier_credit_notes.create');
+        Route::post('credit-notes/{id}/apply', [CreditNoteController::class, 'apply'])->middleware('permission:supplier_credit_notes.update');
+        Route::delete('credit-notes/{id}/applications/{applicationId}', [CreditNoteController::class, 'removeApplication'])->middleware('permission:supplier_credit_notes.update');
+        Route::post('credit-notes/{id}/cancel', [CreditNoteController::class, 'cancel'])->middleware('permission:supplier_credit_notes.delete');
+
+        // Estado de cuenta
+        Route::get('statement', [StatementController::class, 'index'])->middleware('permission:supplier_invoices.view');
+        Route::get('statement/{supplierId}', [StatementController::class, 'show'])->middleware('permission:supplier_invoices.view');
     });
 
     // Adjuntos

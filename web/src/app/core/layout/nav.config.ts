@@ -40,10 +40,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Cuentas por pagar',
     items: [
-      { label: 'Facturas', icon: 'description', route: '/pagos/facturas', soon: true },
-      { label: 'Pagos', icon: 'payments', route: '/pagos/pagos', soon: true },
-      { label: 'Notas crédito', icon: 'credit_card', route: '/pagos/notas-credito', soon: true },
-      { label: 'Estado de cuenta', icon: 'account_balance_wallet', route: '/pagos/estado-cuenta', soon: true },
+      { label: 'Facturas', icon: 'description', route: '/pagos/facturas', permission: 'supplier_invoices.view' },
+      { label: 'Pagos', icon: 'payments', route: '/pagos/pagos', permission: 'supplier_payments.view' },
+      { label: 'Notas crédito', icon: 'credit_card', route: '/pagos/notas-credito', permission: 'supplier_credit_notes.view' },
+      { label: 'Estado de cuenta', icon: 'account_balance_wallet', route: '/pagos/estado-cuenta', permission: 'supplier_invoices.view' },
     ],
   },
   {
