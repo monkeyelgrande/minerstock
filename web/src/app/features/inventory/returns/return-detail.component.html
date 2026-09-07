@@ -1,0 +1,151 @@
+@if (doc(); as d) {
+  <app-page-header
+    [title]="d.number"
+    [subtitle]="(d.supplier?.name ?? '—') + (d.receipt?.number ? ' · Recepción ' + d.receipt?.number : '')"
+    [crumbs]="[{ label: 'Inventario' }, { label: 'Devoluciones a proveedor', route: '/inventario/devoluciones' }, { label: d.number }]"
+  >
+    <app-chip chip [tone]="docTone(d.status)" [label]="d.status_label" />
+
+    @if (showEdit()) {
+      <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [outlined]="true" [disabled]="!!acting()" (onClick)="goEdit()" />
+    }
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="acting() === 'cancel'" [disabled]="!!acting()" (onClick)="cancelReturn()" />
+    }
+    @if (showConfirm()) {
+      <p-button label="Confirmar" icon="pi pi-check-circle" [loading]="acting() === 'confirm'" [disabled]="!!acting()" (onClick)="confirmReturn()" />
+    }
+  </app-page-header>
+
+  <!-- ================= Banda de estado ================= -->
+  @if (d.status === 'anulado') {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Devolución anulada</div>
+        <div class="text-ink-2 mt-0.5">Esta devolución no tiene efecto sobre el stock ni sobre la recepción de origen.</div>
+      </div>
+    </div>
+  } @else if (d.status === 'borrador') {
+    <div class="flex items-start gap-3 rounded-card border border-[#CBD5E1] bg-[#F1F5F9] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#475569] !text-[20px]">pending</span>
+      <div>
+        <div class="font-semibold text-ink">Borrador</div>
+        <div class="text-ink-2 mt-0.5">La mercancía aún no sale del stock. Confirma la devolución para registrar la salida en el kardex.</div>
+      </div>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Ítems devueltos</span>
+          <span class="text-xs text-ink-3">{{ items().length }} línea(s)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[760px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5">Producto</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Recibido</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Devuelto</th>
+                <th class="th-label text-right px-3 py-2.5 w-36">Costo unit. base</th>
+                <th class="th-label text-right px-3 py-2.5 w-36">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of items(); track it.id) {
+                <tr class="border-b border-line last:border-b-0 align-top">
+                  <td class="px-5 py-3">
+                    <div class="text-sm font-medium text-ink">{{ it.product?.name ?? '—' }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product?.sku }}@if (it.notes) { · <span class="italic">{{ it.notes }}</span> }</div>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">
+                    {{ it.received_base !== null ? (it.received_base | number: '1.0-3') : '—' }} <span class="text-xs text-ink-3">{{ it.product?.base_unit }}</span>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink">
+                    {{ it.qty_base | number: '1.0-3' }} <span class="text-xs text-ink-3 font-normal">{{ it.product?.base_unit }}</span>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ it.unit_cost_base | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink">{{ it.line_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="text-center py-8 text-sm text-ink-3">Sin ítems.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-4 border-t border-line">
+          <div class="text-xs text-ink-3">
+            Valor al costo unitario base de la recepción (sin IVA). La nota crédito se registrará en Cuentas por pagar (fase 3).
+          </div>
+          <dl class="grid grid-cols-[auto_minmax(140px,auto)] gap-x-8 gap-y-1 text-sm tabular min-w-[240px]">
+            <dt class="text-ink-2">Unidades base</dt>
+            <dd class="text-right text-ink">{{ totalQtyBase() | number: '1.0-3' }}</dd>
+            <dt class="text-base font-semibold text-ink pt-1 border-t border-line">Total devuelto</dt>
+            <dd class="text-right text-base font-semibold text-ink pt-1 border-t border-line">{{ d.total_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">Recepción</dt>
+          <dd class="text-right">
+            @if (d.receipt) {
+              <a class="doc-link" [routerLink]="['/inventario/recepciones', d.receipt.id]">{{ d.receipt.number }}</a>
+              <div class="text-xs text-ink-3 tabular">{{ d.receipt.received_at | date: 'dd/MM/yyyy' }}</div>
+            } @else {
+              <span class="text-ink-3">—</span>
+            }
+          </dd>
+          <dt class="text-ink-3">Orden de compra</dt>
+          <dd class="text-right">
+            @if (d.receipt?.order; as o) {
+              <a class="doc-link" [routerLink]="['/compras/ordenes', o.id]">{{ o.number }}</a>
+            } @else {
+              <span class="text-ink-3">—</span>
+            }
+          </dd>
+          <dt class="text-ink-3">Proveedor</dt>
+          <dd class="text-ink text-right">
+            {{ d.supplier?.name ?? '—' }}
+            @if (d.supplier?.document_number) {
+              <div class="text-xs text-ink-3 tabular">NIT {{ d.supplier?.document_number }}</div>
+            }
+          </dd>
+          <dt class="text-ink-3">Bodega</dt>
+          <dd class="text-ink text-right">{{ d.warehouse?.name ?? '—' }} @if (d.warehouse?.code) { <span class="text-xs text-ink-3 tabular">{{ d.warehouse?.code }}</span> }</dd>
+          <dt class="text-ink-3">Fecha</dt>
+          <dd class="text-ink text-right tabular">{{ d.date | date: 'dd/MM/yyyy' }}</dd>
+          <dt class="text-ink-3">Motivo</dt>
+          <dd class="text-ink text-right">{{ d.reason_label }}</dd>
+          <dt class="text-ink-3">Elaborado por</dt>
+          <dd class="text-ink text-right">{{ d.creator?.name ?? '—' }}</dd>
+          @if (d.notes) {
+            <dt class="text-ink-3 col-span-2 pt-1 border-t border-line">Observaciones</dt>
+            <dd class="text-ink-2 col-span-2 whitespace-pre-line">{{ d.notes }}</dd>
+          }
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body">
+          <app-timeline [events]="timeline()" />
+        </div>
+      </div>
+
+      <app-attachments type="supplier_return" [documentId]="d.id" [items]="d.attachments ?? []" [canEdit]="canUpdate()" (changed)="load()" />
+    </div>
+  </div>
+} @else {
+  <app-page-header title="Devolución a proveedor" [crumbs]="[{ label: 'Inventario' }, { label: 'Devoluciones a proveedor', route: '/inventario/devoluciones' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando devolución…</div>
+}

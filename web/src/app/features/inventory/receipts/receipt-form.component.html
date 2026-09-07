@@ -1,0 +1,277 @@
+<app-page-header
+  [title]="title()"
+  [subtitle]="isEdit() ? (receipt()?.order?.supplier?.name ?? '') : 'Registra el ingreso de mercancía contra una orden de compra emitida'"
+  [crumbs]="[{ label: 'Inventario' }, { label: 'Recepciones de compra', route: '/inventario/recepciones' }, { label: isEdit() ? (receipt()?.number ?? '…') : 'Nueva' }]"
+>
+  @if (isEdit() && receipt(); as r) {
+    <app-chip chip [tone]="docTone(r.status)" [label]="r.status_label" />
+  }
+  <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancel()" />
+  <p-button label="Guardar borrador" icon="pi pi-save" severity="secondary" [loading]="saving()" [disabled]="loading()" (onClick)="save(false)" />
+  <p-button label="Guardar y confirmar" icon="pi pi-check-circle" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+</app-page-header>
+
+@if (formError(); as e) {
+  <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+    <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">error</span>
+    <div>
+      <div class="font-semibold text-[#B91C1C]">No se pudo guardar</div>
+      <div class="text-ink-2 mt-0.5">{{ e }}</div>
+    </div>
+  </div>
+}
+
+<form [formGroup]="form" (ngSubmit)="save(false)" novalidate class="space-y-4">
+  <!-- ================= Orden de compra ================= -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Orden de compra</span>
+      @if (loading() || ordersLoading()) {
+        <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</span>
+      }
+    </div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div class="xl:col-span-2">
+        <app-field label="Orden de compra" [required]="true" [control]="form.controls.purchase_order_id" [serverError]="err('purchase_order_id')" [submitted]="submitted()" [hint]="isEdit() ? 'La orden no se puede cambiar en una recepción existente.' : undefined">
+          <p-select
+            formControlName="purchase_order_id"
+            [options]="orderOptions()"
+            optionLabel="label"
+            optionValue="id"
+            [placeholder]="ordersLoading() ? 'Cargando órdenes…' : 'Selecciona una orden emitida'"
+            [filter]="true"
+            filterBy="label"
+            filterPlaceholder="Buscar por número o proveedor…"
+            [showClear]="!isEdit()"
+            appendTo="body"
+            styleClass="w-full"
+            emptyMessage="No hay órdenes con ítems pendientes de recibir."
+            (onChange)="onOrderChange($event.value)"
+          >
+            <ng-template #item let-opt>
+              <div class="flex flex-col leading-tight">
+                <span class="text-sm font-medium"><span class="tabular">{{ opt.order.number }}</span> · {{ opt.order.supplier.name }}</span>
+                <span class="text-xs text-ink-3">{{ opt.order.status_label }} · {{ opt.order.warehouse.name }} · {{ opt.order.items.length }} ítem(s) pendiente(s)</span>
+              </div>
+            </ng-template>
+          </p-select>
+        </app-field>
+      </div>
+
+      <div class="xl:col-span-2">
+        @if (selectedOrder(); as o) {
+          <div class="rounded-lg border border-line bg-canvas px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div>
+              <div class="th-label">Proveedor</div>
+              <div class="text-ink font-medium mt-0.5">{{ o.supplier.name }}</div>
+            </div>
+            <div>
+              <div class="th-label">Bodega de la orden</div>
+              <div class="text-ink mt-0.5">{{ o.warehouse.name }} <span class="text-xs text-ink-3 tabular">{{ o.warehouse.code }}</span></div>
+            </div>
+            <div>
+              <div class="th-label">Entrega esperada</div>
+              <div class="text-ink mt-0.5 tabular">{{ o.expected_date ? (o.expected_date | date: 'dd/MM/yyyy') : '—' }}</div>
+            </div>
+          </div>
+        } @else if (isEdit() && receipt(); as r) {
+          <div class="rounded-lg border border-line bg-canvas px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div>
+              <div class="th-label">Orden</div>
+              <div class="text-ink font-medium mt-0.5 tabular">{{ r.order?.number ?? '—' }}</div>
+            </div>
+            <div>
+              <div class="th-label">Proveedor</div>
+              <div class="text-ink mt-0.5">{{ r.order?.supplier?.name ?? '—' }}</div>
+            </div>
+            <div>
+              <div class="th-label">Estado de la orden</div>
+              <div class="text-ink mt-0.5">{{ r.order?.status_label ?? '—' }}</div>
+            </div>
+          </div>
+        } @else {
+          <div class="rounded-lg border border-dashed border-line-strong px-4 py-3 text-sm text-ink-3 flex items-center gap-2 h-full">
+            <span class="material-symbols-outlined !text-[20px]">info</span>
+            Al elegir la orden se cargan el proveedor, la bodega y los ítems pendientes.
+          </div>
+        }
+      </div>
+
+      <app-field label="Bodega de ingreso" [required]="true" [control]="form.controls.warehouse_id" [serverError]="err('warehouse_id')" [submitted]="submitted()">
+        <p-select formControlName="warehouse_id" [options]="ctx.options()" optionLabel="name" optionValue="id" placeholder="Selecciona bodega" appendTo="body" styleClass="w-full">
+          <ng-template #item let-w>
+            <span class="tabular text-ink-3 mr-2">{{ w.code }}</span>{{ w.name }}
+          </ng-template>
+        </p-select>
+      </app-field>
+      <app-field label="Fecha de recepción" [required]="true" [control]="form.controls.received_at" [serverError]="err('received_at')" [submitted]="submitted()">
+        <p-datepicker formControlName="received_at" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full" />
+      </app-field>
+      <app-field label="Remisión del proveedor" [control]="form.controls.supplier_remission" [serverError]="err('supplier_remission')" [submitted]="submitted()">
+        <input pInputText formControlName="supplier_remission" class="w-full tabular" placeholder="N.º de remisión o guía" maxlength="60" />
+      </app-field>
+      <app-field label="Recibido por" hint="Se registra el usuario que guarda la recepción.">
+        <input pInputText class="w-full" [value]="receipt()?.receiver?.name ?? auth.user()?.name ?? ''" [disabled]="true" />
+      </app-field>
+
+      <div class="md:col-span-2 xl:col-span-4">
+        <app-field label="Observaciones" [control]="form.controls.notes" [serverError]="err('notes')" [submitted]="submitted()">
+          <textarea pTextarea formControlName="notes" rows="2" class="w-full" placeholder="Estado de la mercancía, novedades del transporte, etc."></textarea>
+        </app-field>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Ítems ================= -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Ítems</div>
+        <p class="text-xs text-ink-3 mt-0.5">Cantidades pendientes de la orden. Desmarca "Incluir" en las líneas que no llegaron.</p>
+      </div>
+      @if (itemsArray.length) {
+        <span class="text-xs text-ink-3 tabular">{{ includedCount() }} de {{ itemsArray.length }} línea(s) incluida(s)</span>
+      }
+    </div>
+
+    @if (!itemsArray.length) {
+      <div class="card-body text-center py-10">
+        <div class="flex flex-col items-center gap-2 text-ink-3">
+          <span class="material-symbols-outlined !text-[36px]">inventory</span>
+          <span class="text-sm">Selecciona una orden de compra para cargar sus ítems pendientes.</span>
+          @if (submitted()) {
+            <span class="field-error">La recepción necesita al menos un ítem.</span>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="overflow-x-auto" formArrayName="items">
+        <table class="w-full min-w-[1180px]">
+          <thead>
+            <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+              <th class="th-label text-center px-3 py-2.5 w-16">Incluir</th>
+              <th class="th-label text-left px-3 py-2.5 min-w-[220px]">Producto</th>
+              <th class="th-label text-right px-3 py-2.5 w-28">Ordenado</th>
+              <th class="th-label text-right px-3 py-2.5 w-28">Ya recibido</th>
+              <th class="th-label text-right px-3 py-2.5 w-28">Pendiente</th>
+              <th class="th-label text-left px-3 py-2.5 w-44">Unidad</th>
+              <th class="th-label text-right px-3 py-2.5 w-40">Cantidad recibida</th>
+              <th class="th-label text-right px-3 py-2.5 w-32">Equiv. base</th>
+              <th class="th-label text-left px-3 py-2.5 min-w-[160px]">Observación</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of itemsArray.controls; track g; let i = $index) {
+              @if (meta()[i]; as m) {
+                <tr [formGroupName]="i" class="border-b border-line last:border-b-0 align-top" [class.opacity-60]="!g.value.include">
+                  <td class="px-3 py-3 text-center">
+                    <p-checkbox formControlName="include" [binary]="true" [inputId]="'inc_' + i" (onChange)="onIncludeChange(i, $event.checked)" />
+                  </td>
+                  <td class="px-3 py-3">
+                    <div class="text-sm font-medium text-ink">{{ m.product.name }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ m.product.sku }} · base {{ m.product.base_unit ?? '—' }}</div>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">
+                    {{ m.qty_base | number: '1.0-3' }} <span class="text-xs text-ink-3">{{ m.product.base_unit }}</span>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">
+                    {{ m.qty_received_base | number: '1.0-3' }}
+                  </td>
+                  <td class="px-3 py-3 text-right tabular">
+                    <span class="inline-flex items-center rounded-md bg-[#FFF7ED] border border-[#FED7AA] text-[#C2410C] px-2 py-0.5 text-sm font-semibold">
+                      {{ m.pending_base | number: '1.0-3' }}
+                    </span>
+                    <div class="text-[11px] text-ink-3 mt-0.5">{{ m.product.base_unit }}</div>
+                  </td>
+                  <td class="px-3 py-3">
+                    <p-select
+                      formControlName="unit_id"
+                      [options]="m.units"
+                      optionLabel="label"
+                      optionValue="id"
+                      placeholder="Unidad"
+                      appendTo="body"
+                      styleClass="w-full"
+                      (onChange)="onUnitChange(i, $event.value)"
+                    />
+                    @if (err('items.' + i + '.unit_id'); as e) {
+                      <p class="field-error">{{ e }}</p>
+                    } @else if (showError(g, 'unit_id')) {
+                      <p class="field-error">Selecciona una unidad.</p>
+                    }
+                  </td>
+                  <td class="px-3 py-3">
+                    <p-inputnumber
+                      formControlName="quantity"
+                      mode="decimal"
+                      [min]="0"
+                      [max]="calc()[i].max"
+                      [minFractionDigits]="0"
+                      [maxFractionDigits]="3"
+                      locale="es-CO"
+                      placeholder="0"
+                      styleClass="w-full"
+                      inputStyleClass="w-full tabular text-right"
+                    />
+                    <div class="text-[11px] text-ink-3 tabular text-right mt-1">máx. {{ calc()[i].max | number: '1.0-3' }}</div>
+                    @if (err('items.' + i + '.quantity'); as e) {
+                      <p class="field-error">{{ e }}</p>
+                    } @else if (calc()[i].issue; as issue) {
+                      <p class="field-error">{{ issue }}</p>
+                    } @else if (showError(g, 'quantity')) {
+                      <p class="field-error">Ingresa una cantidad mayor que 0.</p>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink pt-[1.15rem]">
+                    @if (g.value.include) {
+                      {{ calc()[i].base | number: '1.0-3' }} <span class="text-xs text-ink-3">{{ m.product.base_unit }}</span>
+                    } @else {
+                      <span class="text-ink-3">—</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3">
+                    <input pInputText formControlName="notes" class="w-full" placeholder="Opcional" maxlength="255" />
+                    @if (err('items.' + i + '.notes'); as e) {
+                      <p class="field-error">{{ e }}</p>
+                    }
+                  </td>
+                </tr>
+                @for (msg of rowErrors(i, ['unit_id', 'quantity', 'notes']); track msg) {
+                  <tr class="border-b border-line">
+                    <td colspan="9" class="px-5 pb-2 field-error">{{ msg }}</td>
+                  </tr>
+                }
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-5 py-3 border-t border-line text-xs text-ink-3">
+        <span>Las cantidades se convierten a la unidad base del producto al guardar; el costo unitario proviene de la orden.</span>
+        <span class="tabular">{{ includedCount() }} línea(s) con cantidad</span>
+      </div>
+    }
+    @if (err('items'); as e) {
+      <p class="field-error px-5 py-3 border-t border-line">{{ e }}</p>
+    }
+  </div>
+
+  <!-- ================= Adjuntos ================= -->
+  @if (receipt(); as r) {
+    <app-attachments type="goods_receipt" [documentId]="r.id" [items]="r.attachments ?? []" [canEdit]="true" title="Fotos de la remisión" hint="Arrastra fotos de la remisión o haz clic para seleccionar" (changed)="reloadReceipt()" />
+  } @else {
+    <div class="card">
+      <div class="card-header"><span class="card-title">Fotos de la remisión</span></div>
+      <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+        <span class="material-symbols-outlined !text-[20px]">photo_camera</span>
+        Podrás adjuntar fotos de la remisión después de guardar el borrador.
+      </div>
+    </div>
+  }
+
+  <div class="flex justify-end gap-2">
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" [disabled]="saving()" (onClick)="cancel()" />
+    <p-button label="Guardar borrador" icon="pi pi-save" severity="secondary" type="submit" [loading]="saving()" [disabled]="loading()" />
+    <p-button label="Guardar y confirmar" icon="pi pi-check-circle" type="button" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+  </div>
+</form>

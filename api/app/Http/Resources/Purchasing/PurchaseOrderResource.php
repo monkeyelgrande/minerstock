@@ -70,6 +70,12 @@ class PurchaseOrderResource extends JsonResource
                 'pending_base' => $i->pendingToReceiveBase(),
                 'notes' => $i->notes,
             ])),
+            'receipts' => $this->whenLoaded('receipts', fn () => $this->receipts->map(fn ($r) => [
+                'id' => $r->id, 'number' => $r->number, 'received_at' => $r->received_at?->format('Y-m-d'),
+                'supplier_remission' => $r->supplier_remission, 'status' => $r->status->value, 'status_label' => $r->status->label('f'),
+                'items_count' => $r->items_count ?? null,
+            ])),
+            'can_receive' => $this->status->canReceive(),
             'approvals' => ApprovalResource::collection($this->whenLoaded('approvals')),
             'attachments' => AttachmentResource::collection($this->whenLoaded('attachments')),
             'creator' => $this->whenLoaded('creator', fn () => ['id' => $this->creator->id, 'name' => $this->creator->name]),

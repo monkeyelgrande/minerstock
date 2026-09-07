@@ -31,6 +31,9 @@
     @if (showIssue()) {
       <p-button label="Emitir" icon="pi pi-send" [loading]="acting() === 'issue'" [disabled]="!!acting()" (onClick)="issue()" />
     }
+    @if (showReceive()) {
+      <p-button label="Registrar recepción" icon="pi pi-inbox" [disabled]="!!acting()" (onClick)="goReceive()" />
+    }
   </app-page-header>
 
   <!-- ================= Banda de estado ================= -->
@@ -193,11 +196,40 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="card">
-          <div class="card-header"><span class="card-title">Recepciones</span></div>
-          <div class="card-body text-sm text-ink-3 flex items-center gap-2">
-            <span class="material-symbols-outlined !text-[20px]">inventory</span>
-            Disponible en la fase de inventario.
+          <div class="card-header">
+            <span class="card-title">Recepciones</span>
+            @if (receipts().length) {
+              <span class="text-xs text-ink-3">{{ receipts().length }} {{ receipts().length === 1 ? 'recepción' : 'recepciones' }}</span>
+            }
           </div>
+          @if (receipts().length) {
+            <ul class="divide-y divide-line">
+              @for (r of receipts(); track r.id) {
+                <li class="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+                  <div class="min-w-0">
+                    <a class="doc-link" [routerLink]="['/inventario/recepciones', r.id]">{{ r.number }}</a>
+                    <div class="text-xs text-ink-3 tabular truncate">
+                      {{ r.received_at | date: 'dd/MM/yyyy' }}
+                      @if (r.supplier_remission) { · Remisión {{ r.supplier_remission }} }
+                      @if (r.items_count !== null) { · {{ r.items_count }} {{ r.items_count === 1 ? 'ítem' : 'ítems' }} }
+                    </div>
+                  </div>
+                  <app-chip [tone]="receiptTone(r.status)" [label]="r.status_label" />
+                </li>
+              }
+            </ul>
+          } @else {
+            <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+              <span class="material-symbols-outlined !text-[20px]">inventory</span>
+              @if (showReceive()) {
+                <span>Aún no se ha registrado ninguna recepción para esta orden.</span>
+              } @else if (o.status === 'emitida' || o.status === 'recibida_parcial') {
+                <span>Aún no hay recepciones registradas.</span>
+              } @else {
+                <span>Las recepciones se registran una vez emitida la orden.</span>
+              }
+            </div>
+          }
         </div>
         <div class="card">
           <div class="card-header"><span class="card-title">Facturas</span></div>

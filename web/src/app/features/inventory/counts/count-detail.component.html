@@ -1,0 +1,291 @@
+@if (count(); as c) {
+  <app-page-header
+    [title]="'Conteo ' + c.number"
+    [subtitle]="(c.warehouse?.name ?? '—') + ' · ' + (c.date | date: 'dd/MM/yyyy')"
+    [crumbs]="[{ label: 'Inventario' }, { label: 'Conteos físicos', route: '/inventario/conteos' }, { label: c.number }]"
+  >
+    <app-chip chip [tone]="statusTone(c.status)" [label]="c.status_label" />
+
+    @if (editable()) {
+      <p-button label="Agregar productos" icon="pi pi-plus" severity="secondary" [outlined]="true" [disabled]="!!acting()" (onClick)="openAdd()" />
+    }
+    @if (isOpen() && canDelete()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="acting() === 'cancel'" [disabled]="!!acting()" (onClick)="cancelCount()" />
+    }
+    @if (editable()) {
+      <p-button label="Guardar avance" icon="pi pi-save" severity="secondary" [loading]="acting() === 'save'" [disabled]="!!acting() || !dirty()" (onClick)="save()" />
+      <p-button
+        label="Cerrar conteo"
+        icon="pi pi-lock"
+        [loading]="acting() === 'close'"
+        [disabled]="!!acting() || !allCounted()"
+        [pTooltip]="allCounted() ? undefined : 'Registra la cantidad de todos los productos para cerrar'"
+        tooltipPosition="bottom"
+        (onClick)="close()"
+      />
+    }
+  </app-page-header>
+
+  <!-- ================= Bandas de estado ================= -->
+  @if (c.status === 'anulado') {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Conteo anulado</div>
+        <div class="text-ink-2 mt-0.5">Este conteo no generó ajustes ni afectó el inventario.</div>
+      </div>
+    </div>
+  } @else if (c.status === 'cerrado') {
+    <div class="flex items-start gap-3 rounded-card border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#065F46] !text-[20px]">task_alt</span>
+      <div>
+        <div class="font-semibold text-[#065F46]">Conteo cerrado {{ c.closed_at ? 'el ' + (c.closed_at | date: 'd MMM y, HH:mm') : '' }}</div>
+        <div class="text-ink-2 mt-0.5">
+          @if (c.adjustment; as adj) {
+            Las diferencias se aplicaron al stock con el ajuste <a class="doc-link" [routerLink]="['/inventario/ajustes', adj.id]">{{ adj.number }}</a>.
+          } @else {
+            No hubo diferencias entre el sistema y lo contado; no se generó ajuste.
+          }
+        </div>
+      </div>
+    </div>
+  } @else if (dirty()) {
+    <div class="flex items-start gap-3 rounded-card border border-[#FED7AA] bg-[#FFF7ED] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#C2410C] !text-[20px]">edit_note</span>
+      <div class="text-ink-2">Tienes cantidades sin guardar. Usa <span class="font-medium text-ink">Guardar avance</span> para no perderlas si sales de la pantalla.</div>
+    </div>
+  }
+
+  <!-- ================= Resumen ================= -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+    <div class="card px-4 py-3">
+      <div class="th-label">Productos</div>
+      <div class="text-2xl font-semibold tabular text-ink mt-1">{{ summary().total }}</div>
+    </div>
+    <div class="card px-4 py-3">
+      <div class="th-label">Contados</div>
+      <div class="flex items-end gap-2 mt-1">
+        <div class="text-2xl font-semibold tabular text-ink">{{ summary().counted }}</div>
+        <div class="text-xs text-ink-3 pb-1.5">de {{ summary().total }}</div>
+      </div>
+      <div class="relative h-1.5 rounded-full bg-slate-200 overflow-hidden mt-2">
+        <div class="absolute inset-y-0 left-0 rounded-full" [class.bg-emerald-500]="progressPct() >= 100" [class.bg-brand]="progressPct() < 100" [style.width.%]="progressPct()"></div>
+      </div>
+    </div>
+    <div class="card px-4 py-3">
+      <div class="th-label">Con diferencia</div>
+      <div class="text-2xl font-semibold tabular mt-1" [class.text-ink]="summary().with_difference === 0" [class.text-[#C2410C]]="summary().with_difference > 0">
+        {{ summary().with_difference }}
+      </div>
+    </div>
+    <div class="card px-4 py-3">
+      <div class="th-label">Sin contar</div>
+      <div class="text-2xl font-semibold tabular mt-1" [class.text-ink]="summary().total - summary().counted === 0" [class.text-[#B91C1C]]="summary().total - summary().counted > 0">
+        {{ summary().total - summary().counted }}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-4 gap-4 items-start">
+    <!-- ================= Tabla de conteo ================= -->
+    <div class="xl:col-span-3 card">
+      <div class="card-header flex-wrap">
+        <span class="card-title">{{ isOpen() ? 'Registro de cantidades' : 'Productos contados' }}</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="relative w-64">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none !text-[18px]">search</span>
+            <input pInputText type="text" class="w-full !pl-9" placeholder="Buscar por SKU o nombre…" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+          </div>
+          <p-selectbutton [options]="filterOptions" optionLabel="label" optionValue="value" [ngModel]="filter()" (ngModelChange)="filter.set($event ?? 'all')" [allowEmpty]="false" size="small" />
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[900px]">
+          <thead>
+            <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+              <th class="th-label text-left px-5 py-2.5">Producto</th>
+              <th class="th-label text-left px-3 py-2.5 w-20">Unidad</th>
+              <th class="th-label text-right px-3 py-2.5 w-28">Sistema</th>
+              <th class="th-label text-right px-3 py-2.5 w-40">Contado</th>
+              <th class="th-label text-right px-3 py-2.5 w-28">Diferencia</th>
+              <th class="th-label text-left px-3 py-2.5 min-w-[180px]">Observación</th>
+              @if (editable()) {
+                <th class="w-12"></th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of visibleRows(); track r.item.id; let vi = $index) {
+              @let tone = diffTone(r.difference);
+              <tr class="border-b border-line last:border-b-0 align-top" [class.bg-[#FFF7ED]/40]="tone === 'pos'" [class.bg-[#FEF2F2]/40]="tone === 'neg'">
+                <td class="px-5 py-2.5">
+                  <div class="text-sm font-medium text-ink">{{ r.item.product?.name ?? '—' }}</div>
+                  <div class="text-xs text-ink-3 tabular">{{ r.item.product?.sku }}@if (r.item.product?.category) { · {{ r.item.product?.category }} }</div>
+                </td>
+                <td class="px-3 py-2.5 text-sm text-ink-2 tabular pt-3.5">{{ r.item.product?.base_unit ?? '—' }}</td>
+                <td class="px-3 py-2.5 text-sm text-right tabular text-ink pt-3.5">{{ r.item.system_qty | number: '1.0-3' }}</td>
+                <td class="px-3 py-2.5">
+                  @if (editable()) {
+                    <div class="flex items-center gap-1" data-count-input>
+                      <p-inputnumber
+                        [ngModel]="r.counted"
+                        (ngModelChange)="setCounted(r, $event)"
+                        (onKeyDown)="onCountKeydown($event, vi)"
+                        mode="decimal"
+                        [min]="0"
+                        [minFractionDigits]="0"
+                        [maxFractionDigits]="3"
+                        locale="es-CO"
+                        placeholder="Sin contar"
+                        styleClass="w-full"
+                        inputStyleClass="w-full tabular text-right"
+                      />
+                      @if (r.counted === null) {
+                        <p-button icon="pi pi-check" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Igual al sistema" tooltipPosition="top" (onClick)="acceptSystem(r)" />
+                      }
+                    </div>
+                  } @else {
+                    <div class="text-sm text-right tabular text-ink pt-1">{{ r.counted !== null ? (r.counted | number: '1.0-3') : '—' }}</div>
+                  }
+                </td>
+                <td class="px-3 py-2.5 text-sm text-right tabular font-semibold pt-3.5">
+                  @switch (tone) {
+                    @case ('none') {
+                      <span class="text-ink-3 font-normal">—</span>
+                    }
+                    @case ('zero') {
+                      <span class="text-[#065F46]">0</span>
+                    }
+                    @case ('neg') {
+                      <span class="text-[#B91C1C]">{{ r.difference | number: '1.0-3' }}</span>
+                    }
+                    @case ('pos') {
+                      <span class="text-[#C2410C]">+{{ r.difference | number: '1.0-3' }}</span>
+                    }
+                  }
+                </td>
+                <td class="px-3 py-2.5">
+                  @if (editable()) {
+                    <input pInputText class="w-full" placeholder="Opcional" maxlength="255" [ngModel]="r.notes" (ngModelChange)="setNotes(r, $event)" />
+                  } @else {
+                    <span class="text-sm text-ink-2">{{ r.notes || '—' }}</span>
+                  }
+                </td>
+                @if (editable()) {
+                  <td class="px-2 py-2 text-right">
+                    <p-button icon="pi pi-times" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Quitar del conteo" [disabled]="!!acting()" (onClick)="removeRow(r)" />
+                  </td>
+                }
+              </tr>
+            } @empty {
+              <tr>
+                <td [attr.colspan]="editable() ? 7 : 6" class="text-center py-10">
+                  <div class="flex flex-col items-center gap-2 text-ink-3">
+                    <span class="material-symbols-outlined !text-[32px]">{{ rows().length ? 'filter_alt_off' : 'inventory_2' }}</span>
+                    <span class="text-sm">{{ rows().length ? 'Ningún producto coincide con el filtro.' : 'El conteo no tiene productos.' }}</span>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-t border-line text-xs text-ink-3">
+        <span>{{ visibleRows().length }} de {{ rows().length }} producto(s)</span>
+        @if (editable()) {
+          <span>Enter pasa al siguiente producto · <i class="pi pi-check !text-[10px]"></i> marca la cantidad del sistema</span>
+        }
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">Bodega</dt>
+          <dd class="text-ink text-right">{{ c.warehouse?.name ?? '—' }} @if (c.warehouse?.code) { <span class="text-xs text-ink-3 tabular">{{ c.warehouse?.code }}</span> }</dd>
+          <dt class="text-ink-3">Fecha</dt>
+          <dd class="text-ink text-right tabular">{{ c.date | date: 'dd/MM/yyyy' }}</dd>
+          <dt class="text-ink-3">Contado por</dt>
+          <dd class="text-ink text-right">{{ c.counter?.name ?? c.creator?.name ?? '—' }}</dd>
+          <dt class="text-ink-3">Abierto por</dt>
+          <dd class="text-ink text-right">{{ c.creator?.name ?? '—' }}</dd>
+          @if (c.closed_at) {
+            <dt class="text-ink-3">Cerrado</dt>
+            <dd class="text-ink text-right tabular">{{ c.closed_at | date: 'd MMM y, HH:mm' }}</dd>
+          }
+          <dt class="text-ink-3">Ajuste</dt>
+          <dd class="text-right">
+            @if (c.adjustment; as adj) {
+              <a class="doc-link" [routerLink]="['/inventario/ajustes', adj.id]">{{ adj.number }}</a>
+            } @else {
+              <span class="text-ink-3">—</span>
+            }
+          </dd>
+          @if (c.notes) {
+            <dt class="text-ink-3 col-span-2 pt-1 border-t border-line">Observaciones</dt>
+            <dd class="text-ink-2 col-span-2 whitespace-pre-line">{{ c.notes }}</dd>
+          }
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body">
+          <app-timeline [events]="timeline()" />
+        </div>
+      </div>
+    </div>
+  </div>
+} @else {
+  <app-page-header title="Conteo físico" [crumbs]="[{ label: 'Inventario' }, { label: 'Conteos físicos', route: '/inventario/conteos' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando conteo…</div>
+}
+
+<!-- ================= Diálogo: agregar productos ================= -->
+<p-dialog
+  [visible]="addOpen()"
+  (visibleChange)="addOpen.set($event)"
+  header="Agregar productos al conteo"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="acting() !== 'add'"
+  [closable]="acting() !== 'add'"
+  [style]="{ width: '560px', maxWidth: '95vw' }"
+>
+  <div class="space-y-4">
+    <p class="text-sm text-ink-2">Los productos agregados toman como cantidad del sistema el stock actual de la bodega.</p>
+    <p-autocomplete
+      [ngModel]="addSelected()"
+      (ngModelChange)="addSelected.set($event ?? [])"
+      [multiple]="true"
+      [suggestions]="productSuggestions()"
+      (completeMethod)="searchProducts($event)"
+      optionLabel="name"
+      dataKey="id"
+      [minLength]="1"
+      [delay]="250"
+      [forceSelection]="true"
+      placeholder="Buscar producto por SKU o nombre…"
+      appendTo="body"
+      styleClass="w-full"
+      inputStyleClass="w-full"
+    >
+      <ng-template #item let-p>
+        <div class="flex flex-col leading-tight">
+          <span class="text-sm font-medium">{{ p.name }}</span>
+          <span class="text-xs text-ink-3">{{ p.sku }} · {{ p.base_unit?.code }}@if (p.category) { · {{ p.category.name }} }</span>
+        </div>
+      </ng-template>
+    </p-autocomplete>
+    <div class="flex items-center justify-between gap-2 pt-1">
+      <span class="text-xs text-ink-3">{{ addSelected().length }} seleccionado(s)</span>
+      <div class="flex gap-2">
+        <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="acting() === 'add'" (onClick)="addOpen.set(false)" />
+        <p-button label="Agregar" icon="pi pi-plus" [disabled]="!addSelected().length" [loading]="acting() === 'add'" (onClick)="addProducts()" />
+      </div>
+    </div>
+  </div>
+</p-dialog>

@@ -1,0 +1,187 @@
+<app-page-header
+  title="Recepciones de compra"
+  subtitle="Ingreso de mercancía a bodega contra órdenes de compra emitidas"
+  [crumbs]="[{ label: 'Inventario' }, { label: 'Recepciones de compra' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Nueva recepción" icon="pi pi-plus" (onClick)="goCreate()" />
+  }
+</app-page-header>
+
+<!-- Pestañas por estado -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="flex items-center gap-2 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+      <span
+        class="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-semibold tabular"
+        [class.bg-amber-100]="tab() === t.key"
+        [class.text-amber-800]="tab() === t.key"
+        [class.bg-slate-100]="tab() !== t.key"
+        [class.text-slate-600]="tab() !== t.key"
+      >{{ countFor(t) }}</span>
+    </button>
+  }
+</div>
+
+<app-crud-toolbar
+  [(search)]="search"
+  searchPlaceholder="Buscar por número, remisión, orden o proveedor…"
+  [showActiveFilter]="false"
+  [createLabel]="null"
+>
+  <p-select
+    [options]="suppliers()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Proveedor"
+    [showClear]="true"
+    [filter]="suppliers().length > 8"
+    filterPlaceholder="Buscar proveedor…"
+    [ngModel]="supplierId()"
+    (ngModelChange)="setSupplier($event)"
+    styleClass="w-56"
+  />
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Bodega"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event)"
+    styleClass="w-48"
+  />
+  <div class="flex items-center gap-1.5">
+    <p-datepicker
+      [ngModel]="dateFrom()"
+      (ngModelChange)="setDateFrom($event)"
+      dateFormat="dd/mm/yy"
+      [showIcon]="true"
+      [showClear]="true"
+      [maxDate]="dateTo()"
+      appendTo="body"
+      placeholder="Desde"
+      styleClass="w-40"
+      inputStyleClass="w-full"
+    />
+    <span class="text-ink-3 text-xs">—</span>
+    <p-datepicker
+      [ngModel]="dateTo()"
+      (ngModelChange)="setDateTo($event)"
+      dateFormat="dd/mm/yy"
+      [showIcon]="true"
+      [showClear]="true"
+      [minDate]="dateFrom()"
+      appendTo="body"
+      placeholder="Hasta"
+      styleClass="w-40"
+      inputStyleClass="w-full"
+    />
+  </div>
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="created_at"
+    [sortOrder]="-1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="number" class="w-32">Número <p-sortIcon field="number" /></th>
+        <th class="w-32">Orden</th>
+        <th>Proveedor</th>
+        <th>Bodega</th>
+        <th pSortableColumn="received_at" class="w-36">Fecha recepción <p-sortIcon field="received_at" /></th>
+        <th class="w-36">Remisión</th>
+        <th class="w-20 text-right">Ítems</th>
+        <th pSortableColumn="status" class="w-36">Estado <p-sortIcon field="status" /></th>
+        <th class="w-32 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/inventario/recepciones', row.id]">{{ row.number }}</a>
+        </td>
+        <td>
+          @if (row.order) {
+            <a class="doc-link" [routerLink]="['/compras/ordenes', row.order.id]">{{ row.order.number }}</a>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td>
+          <div class="text-ink font-medium">{{ row.order?.supplier?.name ?? '—' }}</div>
+          @if (row.order?.supplier?.document_number) {
+            <div class="text-xs text-ink-3 tabular">NIT {{ row.order.supplier.document_number }}</div>
+          }
+        </td>
+        <td>
+          <div class="text-ink">{{ row.warehouse?.name ?? '—' }}</div>
+          @if (row.warehouse?.code) {
+            <div class="text-xs text-ink-3 tabular">{{ row.warehouse.code }}</div>
+          }
+        </td>
+        <td class="tabular text-ink-2">{{ row.received_at | date: 'dd/MM/yyyy' }}</td>
+        <td class="tabular text-ink-2">{{ row.supplier_remission || '—' }}</td>
+        <td class="tabular text-right text-ink-2">{{ row.items_count ?? '—' }}</td>
+        <td><app-chip [tone]="docTone(row.status)" [label]="row.status_label" /></td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver detalle" (onClick)="goDetail(row)" />
+          @if (row.is_editable && canUpdate()) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="goEdit(row)" />
+          }
+          @if (row.status === 'borrador' && canUpdate()) {
+            <p-button
+              icon="pi pi-check-circle"
+              [text]="true"
+              [rounded]="true"
+              severity="success"
+              size="small"
+              pTooltip="Confirmar (ingresa al stock)"
+              [loading]="confirming() === row.id"
+              [disabled]="confirming() !== null"
+              (onClick)="confirmReceipt(row)"
+            />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="9" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">inventory</span>
+            <span class="text-sm">No hay recepciones que coincidan con los filtros.</span>
+            @if (canCreate() && tab() === 'all' && !search()) {
+              <p-button label="Registrar la primera recepción" icon="pi pi-plus" [text]="true" size="small" (onClick)="goCreate()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

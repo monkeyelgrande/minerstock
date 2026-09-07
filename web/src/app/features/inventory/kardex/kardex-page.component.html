@@ -1,0 +1,225 @@
+<app-page-header title="Kardex" subtitle="Historial de movimientos por producto y bodega" [crumbs]="[{ label: 'Inventario' }, { label: 'Kardex' }]">
+  <p-button label="Ver stock" icon="pi pi-table" severity="secondary" [outlined]="true" routerLink="/inventario/stock" />
+</app-page-header>
+
+<!-- ================= Filtros ================= -->
+<div class="card mb-4">
+  <form class="px-4 py-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-3 items-end" (ngSubmit)="consult()">
+    <div class="xl:col-span-4">
+      <label class="field-label">Producto</label>
+      <app-product-picker [ngModel]="product()" (ngModelChange)="product.set($event)" name="product" />
+    </div>
+    <div class="xl:col-span-2">
+      <label class="field-label">Bodega</label>
+      <p-select
+        [options]="ctx.options()"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Todas las bodegas"
+        [showClear]="true"
+        [ngModel]="warehouseId()"
+        (ngModelChange)="warehouseId.set($event)"
+        name="warehouse"
+        styleClass="w-full"
+      />
+    </div>
+    <div class="xl:col-span-2">
+      <label class="field-label">Tipo de movimiento</label>
+      <p-select
+        [options]="movementTypes()"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Todos"
+        [showClear]="true"
+        [ngModel]="type()"
+        (ngModelChange)="type.set($event)"
+        name="type"
+        styleClass="w-full"
+      >
+        <ng-template #item let-t>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined !text-[16px]" [class.text-emerald-600]="t.inbound" [class.text-red-600]="!t.inbound">{{ t.inbound ? 'arrow_downward' : 'arrow_upward' }}</span>
+            {{ t.label }}
+          </div>
+        </ng-template>
+      </p-select>
+    </div>
+    <div class="xl:col-span-2 grid grid-cols-2 gap-2">
+      <div>
+        <label class="field-label">Desde</label>
+        <p-datepicker
+          [ngModel]="dateFrom()"
+          (ngModelChange)="dateFrom.set($event)"
+          name="dateFrom"
+          dateFormat="dd/mm/yy"
+          [showIcon]="true"
+          [showClear]="true"
+          [maxDate]="dateTo()"
+          appendTo="body"
+          placeholder="Desde"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </div>
+      <div>
+        <label class="field-label">Hasta</label>
+        <p-datepicker
+          [ngModel]="dateTo()"
+          (ngModelChange)="dateTo.set($event)"
+          name="dateTo"
+          dateFormat="dd/mm/yy"
+          [showIcon]="true"
+          [showClear]="true"
+          [minDate]="dateFrom()"
+          appendTo="body"
+          placeholder="Hasta"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </div>
+    </div>
+    <div class="xl:col-span-2 flex items-center justify-end gap-2">
+      <p-button label="Limpiar" icon="pi pi-filter-slash" severity="secondary" [outlined]="true" type="button" [disabled]="!hasFormFilters() && !hasQuery()" (onClick)="clear()" />
+      <p-button label="Consultar" icon="pi pi-search" type="submit" [loading]="loading()" />
+    </div>
+  </form>
+</div>
+
+<!-- ================= Resumen de saldo ================= -->
+@if (summary(); as s) {
+  <div class="card mb-4 grid grid-cols-2 lg:grid-cols-4 divide-x divide-line">
+    <div class="px-5 py-4 col-span-2 lg:col-span-1 min-w-0">
+      <div class="th-label">Producto · Bodega</div>
+      <div class="text-sm font-semibold text-ink truncate mt-1">{{ s.product?.name ?? product()?.name ?? '—' }}</div>
+      <div class="text-xs text-ink-3 truncate"><span class="tabular">{{ s.product?.sku }}</span> · {{ s.warehouse?.name ?? warehouseName() ?? '—' }}</div>
+    </div>
+    <div class="px-5 py-4">
+      <div class="th-label">Saldo actual</div>
+      <div class="text-[22px] leading-8 font-bold tabular text-ink mt-1">
+        {{ s.qty | number: '1.0-3' }} <span class="text-xs font-medium text-ink-3">{{ s.product?.base_unit }}</span>
+      </div>
+    </div>
+    <div class="px-5 py-4">
+      <div class="th-label">Costo promedio</div>
+      <div class="text-[22px] leading-8 font-bold tabular text-ink mt-1">{{ s.avgCost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+    </div>
+    <div class="px-5 py-4">
+      <div class="th-label">Valor del saldo</div>
+      <div class="text-[22px] leading-8 font-bold tabular text-ink mt-1">{{ s.value | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</div>
+      <div class="text-[11px] text-ink-3">Al {{ s.at | date: 'dd/MM/yyyy HH:mm' }}</div>
+    </div>
+  </div>
+}
+
+<!-- ================= Movimientos ================= -->
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[25, 50, 100]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    [scrollable]="true"
+    [tableStyle]="{ 'min-width': '1280px' }"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th class="w-36">Fecha</th>
+        <th class="w-32">Documento</th>
+        @if (query().productId === null) {
+          <th class="min-w-[200px]">Producto</th>
+        }
+        @if (query().warehouseId === null) {
+          <th class="w-40">Bodega</th>
+        }
+        <th class="w-44">Tipo</th>
+        <th class="w-24 text-right">Entrada</th>
+        <th class="w-24 text-right">Salida</th>
+        <th class="w-28 text-right">Costo unit.</th>
+        <th class="w-32 text-right">Valor mov.</th>
+        <th class="w-28 text-right">Saldo</th>
+        <th class="w-28 text-right">Costo prom.</th>
+        <th class="w-32 text-right">Valor saldo</th>
+        <th class="w-36">Usuario</th>
+      </tr>
+    </ng-template>
+
+    <ng-template #body let-m>
+      <tr>
+        <td class="tabular text-ink-2 whitespace-nowrap text-sm">{{ m.moved_at | date: 'dd/MM/yyyy HH:mm' }}</td>
+        <td>
+          @if (sourceRoute(m.source); as link) {
+            <a class="doc-link" [routerLink]="link">{{ m.source?.number ?? '#' + m.source?.id }}</a>
+          } @else if (m.source?.number) {
+            <span class="tabular text-ink-2">{{ m.source.number }}</span>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        @if (query().productId === null) {
+          <td>
+            <div class="text-sm font-medium text-ink truncate max-w-[260px]">{{ m.product?.name ?? '—' }}</div>
+            <div class="text-xs text-ink-3 tabular">{{ m.product?.sku }}</div>
+          </td>
+        }
+        @if (query().warehouseId === null) {
+          <td>
+            <div class="text-sm text-ink">{{ m.warehouse?.name ?? '—' }}</div>
+            <div class="text-xs text-ink-3 tabular">{{ m.warehouse?.code }}</div>
+          </td>
+        }
+        <td>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="material-symbols-outlined !text-[16px] shrink-0" [class.text-emerald-600]="m.is_inbound" [class.text-red-600]="!m.is_inbound">
+              {{ m.is_inbound ? 'arrow_downward' : 'arrow_upward' }}
+            </span>
+            <span class="text-sm text-ink">{{ m.type_label }}</span>
+            @if (m.is_reversal) {
+              <span class="chip chip-danger !h-5 !px-1.5 !text-[10px]" pTooltip="Movimiento de reversa por anulación" tooltipPosition="top">Reversa</span>
+            }
+          </div>
+          @if (m.notes) {
+            <div class="text-[11px] text-ink-3 truncate max-w-[280px]" [pTooltip]="m.notes" tooltipPosition="top">{{ m.notes }}</div>
+          }
+        </td>
+        <td class="text-right tabular text-sm font-semibold" [class.text-emerald-700]="m.is_inbound">
+          {{ m.is_inbound ? (abs(m.qty_base) | number: '1.0-3') : '' }}
+        </td>
+        <td class="text-right tabular text-sm font-semibold" [class.text-red-700]="!m.is_inbound">
+          {{ !m.is_inbound ? (abs(m.qty_base) | number: '1.0-3') : '' }}
+        </td>
+        <td class="text-right tabular text-sm text-ink-2">{{ m.unit_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td class="text-right tabular text-sm text-ink-2">{{ abs(m.total_cost) | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td class="text-right tabular text-sm font-bold text-ink whitespace-nowrap">
+          {{ m.balance_qty_after | number: '1.0-3' }} <span class="text-[11px] font-normal text-ink-3">{{ m.product?.base_unit }}</span>
+        </td>
+        <td class="text-right tabular text-sm text-ink-2">{{ m.balance_cost_after | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td class="text-right tabular text-sm text-ink">{{ m.balance_value_after | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td class="text-sm text-ink-2 truncate max-w-[160px]">{{ m.user?.name ?? '—' }}</td>
+      </tr>
+    </ng-template>
+
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="13" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">history</span>
+            @if (hasQuery()) {
+              <span class="text-sm">No hay movimientos para los filtros seleccionados.</span>
+              <p-button label="Limpiar filtros" icon="pi pi-filter-slash" [text]="true" size="small" (onClick)="clear()" />
+            } @else if (loaded()) {
+              <span class="text-sm">Aún no hay movimientos de inventario. Registra una recepción o un ajuste de inventario inicial.</span>
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

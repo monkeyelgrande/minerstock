@@ -1,0 +1,252 @@
+<app-page-header
+  [title]="title()"
+  [subtitle]="isEdit() ? (doc()?.supplier?.name ?? '') : 'Devuelve al proveedor mercancía de una recepción confirmada'"
+  [crumbs]="[{ label: 'Inventario' }, { label: 'Devoluciones a proveedor', route: '/inventario/devoluciones' }, { label: isEdit() ? (doc()?.number ?? '…') : 'Nueva' }]"
+>
+  @if (isEdit() && doc(); as d) {
+    <app-chip chip [tone]="docTone(d.status)" [label]="d.status_label" />
+  }
+  <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancel()" />
+  <p-button label="Guardar borrador" icon="pi pi-save" severity="secondary" [loading]="saving()" [disabled]="loading()" (onClick)="save(false)" />
+  <p-button label="Guardar y confirmar" icon="pi pi-check-circle" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+</app-page-header>
+
+@if (formError(); as e) {
+  <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+    <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">error</span>
+    <div>
+      <div class="font-semibold text-[#B91C1C]">No se pudo guardar</div>
+      <div class="text-ink-2 mt-0.5">{{ e }}</div>
+    </div>
+  </div>
+}
+
+<form [formGroup]="form" (ngSubmit)="save(false)" novalidate class="space-y-4">
+  <!-- ================= Recepción de origen ================= -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Recepción de origen</span>
+      @if (loading() || receiptsLoading()) {
+        <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</span>
+      }
+    </div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div class="xl:col-span-2">
+        <app-field label="Recepción confirmada" [required]="true" [control]="form.controls.goods_receipt_id" [serverError]="err('goods_receipt_id')" [submitted]="submitted()" [hint]="isEdit() ? 'La recepción no se puede cambiar en una devolución existente.' : undefined">
+          <p-select
+            formControlName="goods_receipt_id"
+            [options]="receiptOptions()"
+            optionLabel="label"
+            optionValue="id"
+            [placeholder]="receiptsLoading() ? 'Cargando recepciones…' : 'Selecciona una recepción confirmada'"
+            [filter]="true"
+            filterBy="label"
+            filterPlaceholder="Buscar por número, orden o proveedor…"
+            [showClear]="!isEdit()"
+            appendTo="body"
+            styleClass="w-full"
+            emptyMessage="No hay recepciones confirmadas."
+            (onChange)="onReceiptChange($event.value)"
+          >
+            <ng-template #item let-opt>
+              <div class="flex flex-col leading-tight">
+                <span class="text-sm font-medium"><span class="tabular">{{ opt.receipt.number }}</span> · {{ opt.receipt.order?.supplier?.name ?? '—' }}</span>
+                <span class="text-xs text-ink-3 tabular">{{ opt.receipt.order?.number }} · {{ opt.receipt.warehouse?.name }} · {{ opt.receipt.received_at | date: 'dd/MM/yyyy' }}</span>
+              </div>
+            </ng-template>
+          </p-select>
+        </app-field>
+      </div>
+
+      <div class="xl:col-span-2">
+        @if (sourceReceipt(); as r) {
+          <div class="rounded-lg border border-line bg-canvas px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div>
+              <div class="th-label">Proveedor</div>
+              <div class="text-ink font-medium mt-0.5">{{ r.order?.supplier?.name ?? '—' }}</div>
+            </div>
+            <div>
+              <div class="th-label">Bodega</div>
+              <div class="text-ink mt-0.5">{{ r.warehouse?.name ?? '—' }} <span class="text-xs text-ink-3 tabular">{{ r.warehouse?.code }}</span></div>
+            </div>
+            <div>
+              <div class="th-label">Fecha recepción</div>
+              <div class="text-ink mt-0.5 tabular">{{ r.received_at | date: 'dd/MM/yyyy' }}</div>
+            </div>
+          </div>
+        } @else {
+          <div class="rounded-lg border border-dashed border-line-strong px-4 py-3 text-sm text-ink-3 flex items-center gap-2 h-full">
+            <span class="material-symbols-outlined !text-[20px]">info</span>
+            Al elegir la recepción se cargan el proveedor, la bodega y los ítems recibidos.
+          </div>
+        }
+      </div>
+
+      <app-field label="Fecha" [required]="true" [control]="form.controls.date" [serverError]="err('date')" [submitted]="submitted()">
+        <p-datepicker formControlName="date" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full" />
+      </app-field>
+      <app-field label="Motivo" [required]="true" [control]="form.controls.reason" [serverError]="err('reason')" [submitted]="submitted()">
+        <p-select formControlName="reason" [options]="reasons()" optionLabel="label" optionValue="value" placeholder="Selecciona el motivo" appendTo="body" styleClass="w-full" />
+      </app-field>
+      <div class="md:col-span-2">
+        <app-field label="Observaciones" [control]="form.controls.notes" [serverError]="err('notes')" [submitted]="submitted()">
+          <textarea pTextarea formControlName="notes" rows="2" class="w-full" placeholder="Detalle de la novedad, acuerdo con el proveedor, etc."></textarea>
+        </app-field>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Ítems ================= -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Ítems</div>
+        <p class="text-xs text-ink-3 mt-0.5">Marca "Incluir" en las líneas que se devuelven e indica la cantidad en unidad base.</p>
+      </div>
+      @if (itemsArray.length) {
+        <span class="text-xs text-ink-3 tabular">{{ includedCount() }} de {{ itemsArray.length }} línea(s) incluida(s)</span>
+      }
+    </div>
+
+    @if (itemsLoading()) {
+      <div class="card-body text-center py-10 text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando ítems de la recepción…</div>
+    } @else if (!itemsArray.length) {
+      <div class="card-body text-center py-10">
+        <div class="flex flex-col items-center gap-2 text-ink-3">
+          <span class="material-symbols-outlined !text-[36px]">assignment_return</span>
+          <span class="text-sm">Selecciona una recepción confirmada para cargar sus ítems.</span>
+          @if (submitted()) {
+            <span class="field-error">La devolución necesita al menos un ítem.</span>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="overflow-x-auto" formArrayName="items">
+        <table class="w-full min-w-[1100px]">
+          <thead>
+            <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+              <th class="th-label text-center px-3 py-2.5 w-16">Incluir</th>
+              <th class="th-label text-left px-3 py-2.5 min-w-[220px]">Producto</th>
+              <th class="th-label text-right px-3 py-2.5 w-28">Recibido</th>
+              <th class="th-label text-right px-3 py-2.5 w-28">Ya devuelto</th>
+              <th class="th-label text-right px-3 py-2.5 w-28">Disponible</th>
+              <th class="th-label text-right px-3 py-2.5 w-40">Cantidad a devolver</th>
+              <th class="th-label text-right px-3 py-2.5 w-32">Costo unit.</th>
+              <th class="th-label text-right px-3 py-2.5 w-32">Valor</th>
+              <th class="th-label text-left px-3 py-2.5 min-w-[160px]">Observación</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of itemsArray.controls; track g; let i = $index) {
+              @if (meta()[i]; as m) {
+                <tr [formGroupName]="i" class="border-b border-line last:border-b-0 align-top" [class.opacity-60]="!g.value.include">
+                  <td class="px-3 py-3 text-center">
+                    <p-checkbox formControlName="include" [binary]="true" [inputId]="'inc_' + i" [pTooltip]="m.returnable_base <= 0 ? 'Sin cantidad disponible para devolver' : undefined" tooltipPosition="top" (onChange)="onIncludeChange(i, $event.checked)" />
+                  </td>
+                  <td class="px-3 py-3">
+                    <div class="text-sm font-medium text-ink">{{ m.product.name }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ m.product.sku }} · base {{ m.product.base_unit ?? '—' }}</div>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">
+                    {{ m.qty_base | number: '1.0-3' }} <span class="text-xs text-ink-3">{{ m.product.base_unit }}</span>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular" [class.text-ink-3]="!m.qty_returned_base" [class.text-[#B91C1C]]="m.qty_returned_base > 0">
+                    {{ m.qty_returned_base | number: '1.0-3' }}
+                  </td>
+                  <td class="px-3 py-3 text-right tabular">
+                    <span
+                      class="inline-flex items-center rounded-md border px-2 py-0.5 text-sm font-semibold"
+                      [class.bg-[#ECFDF5]]="m.returnable_base > 0"
+                      [class.border-[#A7F3D0]]="m.returnable_base > 0"
+                      [class.text-[#065F46]]="m.returnable_base > 0"
+                      [class.bg-[#F1F5F9]]="m.returnable_base <= 0"
+                      [class.border-[#CBD5E1]]="m.returnable_base <= 0"
+                      [class.text-[#475569]]="m.returnable_base <= 0"
+                    >
+                      {{ m.returnable_base | number: '1.0-3' }}
+                    </span>
+                    <div class="text-[11px] text-ink-3 mt-0.5">{{ m.product.base_unit }}</div>
+                  </td>
+                  <td class="px-3 py-3">
+                    <p-inputnumber
+                      formControlName="qty_base"
+                      mode="decimal"
+                      [min]="0"
+                      [max]="m.returnable_base"
+                      [minFractionDigits]="0"
+                      [maxFractionDigits]="3"
+                      locale="es-CO"
+                      placeholder="0"
+                      [suffix]="' ' + (m.product.base_unit ?? '')"
+                      styleClass="w-full"
+                      inputStyleClass="w-full tabular text-right"
+                    />
+                    @if (err('items.' + i + '.qty_base'); as e) {
+                      <p class="field-error">{{ e }}</p>
+                    } @else if (calc()[i].issue; as issue) {
+                      <p class="field-error">{{ issue }}</p>
+                    } @else if (showError(g, 'qty_base')) {
+                      <p class="field-error">Ingresa una cantidad mayor que 0.</p>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2 pt-[1.15rem]">{{ m.unit_cost_base | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink pt-[1.15rem]">
+                    @if (g.value.include) {
+                      {{ calc()[i].value | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+                    } @else {
+                      <span class="text-ink-3">—</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3">
+                    <input pInputText formControlName="notes" class="w-full" placeholder="Opcional" maxlength="255" />
+                    @if (err('items.' + i + '.notes'); as e) {
+                      <p class="field-error">{{ e }}</p>
+                    }
+                  </td>
+                </tr>
+                @for (msg of rowErrors(i, ['qty_base', 'notes']); track msg) {
+                  <tr class="border-b border-line">
+                    <td colspan="9" class="px-5 pb-2 field-error">{{ msg }}</td>
+                  </tr>
+                }
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Totales -->
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 px-5 py-4 border-t border-line">
+        <div class="text-xs text-ink-3 sm:pt-1">Valor al costo unitario base de la recepción (sin IVA). La nota crédito se registrará en Cuentas por pagar (fase 3).</div>
+        <dl class="grid grid-cols-[auto_minmax(140px,auto)] gap-x-8 gap-y-1 text-sm tabular sm:min-w-[280px]">
+          <dt class="text-ink-2">Líneas incluidas</dt>
+          <dd class="text-right text-ink">{{ includedCount() }}</dd>
+          <dt class="text-base font-semibold text-ink pt-1 border-t border-line">Total a devolver</dt>
+          <dd class="text-right text-base font-semibold text-ink pt-1 border-t border-line">{{ total() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+        </dl>
+      </div>
+    }
+    @if (err('items'); as e) {
+      <p class="field-error px-5 py-3 border-t border-line">{{ e }}</p>
+    }
+  </div>
+
+  <!-- ================= Adjuntos ================= -->
+  @if (doc(); as d) {
+    <app-attachments type="supplier_return" [documentId]="d.id" [items]="d.attachments ?? []" [canEdit]="true" (changed)="reloadDoc()" />
+  } @else {
+    <div class="card">
+      <div class="card-header"><span class="card-title">Adjuntos</span></div>
+      <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+        <span class="material-symbols-outlined !text-[20px]">attach_file</span>
+        Podrás adjuntar fotos o documentos después de guardar el borrador.
+      </div>
+    </div>
+  }
+
+  <div class="flex justify-end gap-2">
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" [disabled]="saving()" (onClick)="cancel()" />
+    <p-button label="Guardar borrador" icon="pi pi-save" severity="secondary" type="submit" [loading]="saving()" [disabled]="loading()" />
+    <p-button label="Guardar y confirmar" icon="pi pi-check-circle" type="button" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+  </div>
+</form>

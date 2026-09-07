@@ -28,6 +28,11 @@ export const routes: Routes = [
         loadChildren: () => import('./features/purchasing/purchasing.routes').then((m) => m.PURCHASING_ROUTES),
       },
       {
+        path: 'inventario',
+        canActivateChild: [permissionGuard],
+        loadChildren: () => import('./features/inventory/inventory.routes').then((m) => m.INVENTORY_ROUTES),
+      },
+      {
         path: 'catalogo',
         canActivateChild: [permissionGuard],
         loadChildren: () => import('./features/catalog/catalog.routes').then((m) => m.CATALOG_ROUTES),

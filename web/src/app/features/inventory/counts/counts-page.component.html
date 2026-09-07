@@ -1,0 +1,219 @@
+<app-page-header
+  title="Conteos físicos"
+  subtitle="Verifica las existencias reales de una bodega y genera el ajuste por diferencias"
+  [crumbs]="[{ label: 'Inventario' }, { label: 'Conteos físicos' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Nuevo conteo" icon="pi pi-plus" (onClick)="openDialog()" />
+  }
+</app-page-header>
+
+<!-- Pestañas por estado -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+    </button>
+  }
+</div>
+
+<app-crud-toolbar [(search)]="search" searchPlaceholder="Buscar por número…" [showActiveFilter]="false" [createLabel]="null">
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Bodega"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event)"
+    styleClass="w-48"
+  />
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th class="w-32">Número</th>
+        <th>Bodega</th>
+        <th class="w-28">Fecha</th>
+        <th class="w-44">Contado por</th>
+        <th class="w-28 text-right">Productos</th>
+        <th class="w-32">Estado</th>
+        <th class="w-32">Ajuste</th>
+        <th class="w-24 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/inventario/conteos', row.id]">{{ row.number }}</a>
+        </td>
+        <td>
+          <div class="text-ink">{{ row.warehouse?.name ?? '—' }}</div>
+          @if (row.warehouse?.code) {
+            <div class="text-xs text-ink-3 tabular">{{ row.warehouse.code }}</div>
+          }
+        </td>
+        <td class="tabular text-ink-2">{{ row.date | date: 'dd/MM/yyyy' }}</td>
+        <td class="text-ink-2">{{ row.counter?.name ?? row.creator?.name ?? '—' }}</td>
+        <td class="tabular text-right text-ink-2">{{ row.items_count ?? '—' }}</td>
+        <td><app-chip [tone]="statusTone(row.status)" [label]="row.status_label" /></td>
+        <td>
+          @if (row.adjustment) {
+            <a class="doc-link" [routerLink]="['/inventario/ajustes', row.adjustment.id]">{{ row.adjustment.number }}</a>
+          } @else if (row.status === 'cerrado') {
+            <span class="text-xs text-ink-3" pTooltip="Se cerró sin diferencias" tooltipPosition="top">Sin diferencias</span>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" [pTooltip]="row.is_open ? 'Registrar conteo' : 'Ver detalle'" (onClick)="goDetail(row)" />
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="8" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">fact_check</span>
+            <span class="text-sm">No hay conteos que coincidan con los filtros.</span>
+            @if (canCreate() && tab() === 'all' && !search()) {
+              <p-button label="Abrir el primer conteo" icon="pi pi-plus" [text]="true" size="small" (onClick)="openDialog()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<!-- ================= Diálogo: nuevo conteo ================= -->
+<p-dialog
+  [visible]="dialogOpen()"
+  (visibleChange)="dialogOpen.set($event)"
+  header="Nuevo conteo físico"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!opening()"
+  [closable]="!opening()"
+  [style]="{ width: '640px', maxWidth: '95vw' }"
+>
+  <form [formGroup]="dialogForm" (ngSubmit)="openCount()" novalidate class="space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <app-field label="Bodega" [required]="true" [control]="dialogForm.controls.warehouse_id" [serverError]="err('warehouse_id')" [submitted]="submitted()">
+        <p-select formControlName="warehouse_id" [options]="ctx.options()" optionLabel="name" optionValue="id" placeholder="Selecciona bodega" appendTo="body" styleClass="w-full">
+          <ng-template #item let-w>
+            <span class="tabular text-ink-3 mr-2">{{ w.code }}</span>{{ w.name }}
+          </ng-template>
+        </p-select>
+      </app-field>
+      <app-field label="Fecha" [required]="true" [control]="dialogForm.controls.date" [serverError]="err('date')" [submitted]="submitted()">
+        <p-datepicker formControlName="date" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full" />
+      </app-field>
+    </div>
+
+    <app-field label="Alcance" [required]="true" [serverError]="err('scope')" [submitted]="submitted()">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        @for (opt of scopeOptions; track opt.value) {
+          <label
+            class="flex items-start gap-2 rounded-card border px-3 py-2.5 cursor-pointer transition-colors"
+            [class.border-brand]="scope() === opt.value"
+            [class.bg-amber-50/40]="scope() === opt.value"
+            [class.border-line]="scope() !== opt.value"
+          >
+            <p-radiobutton formControlName="scope" [value]="opt.value" [inputId]="'scope_' + opt.value" />
+            <span class="min-w-0">
+              <span class="block text-sm font-medium text-ink">{{ opt.label }}</span>
+              <span class="block text-xs text-ink-3 mt-0.5">{{ opt.hint }}</span>
+            </span>
+          </label>
+        }
+      </div>
+    </app-field>
+
+    @if (scope() === 'category') {
+      <app-field label="Categoría" [required]="true" [serverError]="err('category_id')" [submitted]="submitted()">
+        <p-select
+          formControlName="category_id"
+          [options]="categories()"
+          optionLabel="name"
+          optionValue="id"
+          placeholder="Selecciona categoría"
+          [filter]="categories().length > 8"
+          filterPlaceholder="Buscar categoría…"
+          [showClear]="true"
+          appendTo="body"
+          styleClass="w-full"
+        />
+      </app-field>
+    } @else if (scope() === 'products') {
+      <app-field label="Productos" [required]="true" [serverError]="err('product_ids')" [submitted]="submitted()" hint="Escribe el SKU o nombre y elige de la lista. Puedes agregar más productos después de abrir el conteo.">
+        <p-autocomplete
+          formControlName="products"
+          [multiple]="true"
+          [suggestions]="productSuggestions()"
+          (completeMethod)="searchProducts($event)"
+          optionLabel="name"
+          dataKey="id"
+          [minLength]="1"
+          [delay]="250"
+          [forceSelection]="true"
+          placeholder="Buscar producto por SKU o nombre…"
+          appendTo="body"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        >
+          <ng-template #item let-p>
+            <div class="flex flex-col leading-tight">
+              <span class="text-sm font-medium">{{ p.name }}</span>
+              <span class="text-xs text-ink-3">{{ p.sku }} · {{ p.base_unit?.code }}@if (p.category) { · {{ p.category.name }} }</span>
+            </div>
+          </ng-template>
+        </p-autocomplete>
+        @if (selectedProducts().length) {
+          <p class="text-xs text-ink-3 mt-1">{{ selectedProducts().length }} producto(s) seleccionado(s)</p>
+        }
+      </app-field>
+    }
+
+    <app-field label="Observaciones" [serverError]="err('notes')">
+      <textarea pTextarea formControlName="notes" rows="2" class="w-full" placeholder="Responsables, zonas contadas, etc."></textarea>
+    </app-field>
+
+    <div class="flex items-start gap-2 rounded-card border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2.5 text-xs text-ink-2">
+      <span class="material-symbols-outlined text-[#1D4ED8] !text-[18px]">info</span>
+      <span>Al abrir el conteo se toma una foto del stock del sistema para cada producto. Al cerrarlo, las diferencias generan un ajuste confirmado automáticamente.</span>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-1">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" [disabled]="opening()" (onClick)="dialogOpen.set(false)" />
+      <p-button label="Abrir conteo" icon="pi pi-play" type="submit" [loading]="opening()" />
+    </div>
+  </form>
+</p-dialog>

@@ -36,7 +36,7 @@ export interface Attachment {
   created_at: string;
 }
 
-export type AttachableType = 'purchase_request' | 'quotation' | 'purchase_order';
+export type AttachableType = 'purchase_request' | 'quotation' | 'purchase_order' | 'goods_receipt' | 'supplier_return' | 'adjustment';
 
 // ---------- Solicitudes de compra ----------
 export interface PurchaseRequestItem {
@@ -250,6 +250,8 @@ export interface PurchaseOrder {
   items_count?: number;
   received_pct?: number;
   items?: PurchaseOrderItem[];
+  receipts?: { id: number; number: string; received_at: string; supplier_remission: string | null; status: string; status_label: string; items_count: number | null }[];
+  can_receive?: boolean;
   approvals?: Approval[];
   attachments?: Attachment[];
   creator?: NamedRef;

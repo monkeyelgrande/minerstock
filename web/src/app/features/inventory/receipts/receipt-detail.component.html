@@ -1,0 +1,200 @@
+@if (receipt(); as r) {
+  <app-page-header
+    [title]="r.number"
+    [subtitle]="(r.order?.supplier?.name ?? '—') + (r.order?.number ? ' · Orden ' + r.order?.number : '')"
+    [crumbs]="[{ label: 'Inventario' }, { label: 'Recepciones de compra', route: '/inventario/recepciones' }, { label: r.number }]"
+  >
+    <app-chip chip [tone]="docTone(r.status)" [label]="r.status_label" />
+
+    @if (showEdit()) {
+      <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [outlined]="true" [disabled]="!!acting()" (onClick)="goEdit()" />
+    }
+    @if (showReturn()) {
+      <p-button label="Nueva devolución" icon="pi pi-reply" severity="secondary" [outlined]="true" [disabled]="!!acting()" (onClick)="goReturn()" />
+    }
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="acting() === 'cancel'" [disabled]="!!acting()" (onClick)="cancelReceipt()" />
+    }
+    @if (showConfirm()) {
+      <p-button label="Confirmar" icon="pi pi-check-circle" [loading]="acting() === 'confirm'" [disabled]="!!acting()" (onClick)="confirmReceipt()" />
+    }
+  </app-page-header>
+
+  <!-- ================= Banda de estado ================= -->
+  @if (r.status === 'anulado') {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Recepción anulada</div>
+        <div class="text-ink-2 mt-0.5">Esta recepción no tiene efecto sobre el stock ni sobre la orden de compra.</div>
+      </div>
+    </div>
+  } @else if (r.status === 'borrador') {
+    <div class="flex items-start gap-3 rounded-card border border-[#CBD5E1] bg-[#F1F5F9] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#475569] !text-[20px]">pending</span>
+      <div>
+        <div class="font-semibold text-ink">Borrador</div>
+        <div class="text-ink-2 mt-0.5">La mercancía aún no ingresa al stock. Confirma la recepción para registrar el movimiento en el kardex y actualizar la orden.</div>
+      </div>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Ítems recibidos</span>
+          <span class="text-xs text-ink-3">{{ items().length }} línea(s)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[860px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5">Producto</th>
+                <th class="th-label text-left px-3 py-2.5 w-24">Unidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Cantidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-28">Equiv. base</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Costo unit. base</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Valor</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Devuelto</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of items(); track it.id) {
+                <tr class="border-b border-line last:border-b-0 align-top">
+                  <td class="px-5 py-3">
+                    <div class="text-sm font-medium text-ink">{{ it.product?.name ?? '—' }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product?.sku }}@if (it.notes) { · <span class="italic">{{ it.notes }}</span> }</div>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">
+                    {{ it.unit?.code ?? '—' }}
+                    @if (it.factor !== 1) {
+                      <div class="text-[11px] text-ink-3">×{{ it.factor | number: '1.0-3' }} {{ it.product?.base_unit }}</div>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink">{{ it.quantity | number: '1.0-3' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">
+                    {{ it.qty_base | number: '1.0-3' }} <span class="text-xs text-ink-3">{{ it.product?.base_unit }}</span>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ it.unit_cost_base | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink">{{ it.line_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular" [class.text-ink-3]="!it.qty_returned_base" [class.text-[#B91C1C]]="it.qty_returned_base > 0">
+                    {{ it.qty_returned_base | number: '1.0-3' }}
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="7" class="text-center py-8 text-sm text-ink-3">Sin ítems.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between gap-4 px-5 py-4 border-t border-line">
+          <div class="text-xs text-ink-3">
+            Costos en unidad base tomados de la orden de compra (sin IVA).
+            @if (totalReturnedBase() > 0) {
+              <span class="text-[#B91C1C]"> · {{ totalReturnedBase() | number: '1.0-3' }} unidades base devueltas.</span>
+            }
+          </div>
+          <dl class="grid grid-cols-[auto_minmax(140px,auto)] gap-x-8 gap-y-1 text-sm tabular min-w-[240px]">
+            <dt class="text-base font-semibold text-ink">Total recibido</dt>
+            <dd class="text-right text-base font-semibold text-ink">{{ (r.total_cost ?? 0) | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Devoluciones a proveedor</span>
+          @if (returns().length) {
+            <span class="text-xs text-ink-3">{{ returns().length }} documento(s)</span>
+          }
+        </div>
+        @if (returns().length) {
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                  <th class="th-label text-left px-5 py-2.5 w-32">Número</th>
+                  <th class="th-label text-left px-3 py-2.5 w-32">Fecha</th>
+                  <th class="th-label text-left px-3 py-2.5 w-36">Estado</th>
+                  <th class="th-label text-right px-5 py-2.5">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (d of returns(); track d.id) {
+                  <tr class="border-b border-line last:border-b-0">
+                    <td class="px-5 py-3"><a class="doc-link" [routerLink]="['/inventario/devoluciones', d.id]">{{ d.number }}</a></td>
+                    <td class="px-3 py-3 text-sm tabular text-ink-2">{{ d.date | date: 'dd/MM/yyyy' }}</td>
+                    <td class="px-3 py-3"><app-chip [tone]="docTone(d.status)" [label]="d.status_label" /></td>
+                    <td class="px-5 py-3 text-sm text-right tabular font-medium text-ink">{{ d.total_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+            <span class="material-symbols-outlined !text-[20px]">assignment_return</span>
+            @if (r.status === 'confirmado') {
+              Sin devoluciones. Puedes registrar una con "Nueva devolución".
+            } @else {
+              Sin devoluciones. Solo se pueden devolver ítems de recepciones confirmadas.
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">Orden de compra</dt>
+          <dd class="text-right">
+            @if (r.order) {
+              <a class="doc-link" [routerLink]="['/compras/ordenes', r.order.id]">{{ r.order.number }}</a>
+              <div class="text-xs text-ink-3">{{ r.order.status_label }}</div>
+            } @else {
+              <span class="text-ink-3">—</span>
+            }
+          </dd>
+          <dt class="text-ink-3">Proveedor</dt>
+          <dd class="text-ink text-right">
+            {{ r.order?.supplier?.name ?? '—' }}
+            @if (r.order?.supplier?.document_number) {
+              <div class="text-xs text-ink-3 tabular">NIT {{ r.order?.supplier?.document_number }}</div>
+            }
+          </dd>
+          <dt class="text-ink-3">Bodega de ingreso</dt>
+          <dd class="text-ink text-right">{{ r.warehouse?.name ?? '—' }} @if (r.warehouse?.code) { <span class="text-xs text-ink-3 tabular">{{ r.warehouse?.code }}</span> }</dd>
+          <dt class="text-ink-3">Fecha de recepción</dt>
+          <dd class="text-ink text-right tabular">{{ r.received_at | date: 'dd/MM/yyyy' }}</dd>
+          <dt class="text-ink-3">Remisión</dt>
+          <dd class="text-ink text-right tabular">{{ r.supplier_remission || '—' }}</dd>
+          <dt class="text-ink-3">Recibido por</dt>
+          <dd class="text-ink text-right">{{ r.receiver?.name ?? '—' }}</dd>
+          <dt class="text-ink-3">Elaborado por</dt>
+          <dd class="text-ink text-right">{{ r.creator?.name ?? '—' }}</dd>
+          @if (r.notes) {
+            <dt class="text-ink-3 col-span-2 pt-1 border-t border-line">Observaciones</dt>
+            <dd class="text-ink-2 col-span-2 whitespace-pre-line">{{ r.notes }}</dd>
+          }
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body">
+          <app-timeline [events]="timeline()" />
+        </div>
+      </div>
+
+      <app-attachments type="goods_receipt" [documentId]="r.id" [items]="r.attachments ?? []" [canEdit]="canUpdate()" title="Fotos de la remisión" (changed)="load()" />
+    </div>
+  </div>
+} @else {
+  <app-page-header title="Recepción de compra" [crumbs]="[{ label: 'Inventario' }, { label: 'Recepciones de compra', route: '/inventario/recepciones' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando recepción…</div>
+}

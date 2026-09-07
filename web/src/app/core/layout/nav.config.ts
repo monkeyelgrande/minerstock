@@ -29,12 +29,12 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Inventario',
     items: [
-      { label: 'Recepciones', icon: 'inventory', route: '/inventario/recepciones', soon: true },
-      { label: 'Stock', icon: 'layers', route: '/inventario/stock', soon: true },
-      { label: 'Kardex', icon: 'receipt_long', route: '/inventario/kardex', soon: true },
-      { label: 'Devoluciones', icon: 'keyboard_return', route: '/inventario/devoluciones', soon: true },
-      { label: 'Ajustes', icon: 'tune', route: '/inventario/ajustes', soon: true },
-      { label: 'Conteos', icon: 'checklist', route: '/inventario/conteos', soon: true },
+      { label: 'Stock', icon: 'layers', route: '/inventario/stock', permission: 'stock.view' },
+      { label: 'Kardex', icon: 'receipt_long', route: '/inventario/kardex', permission: 'stock.view' },
+      { label: 'Recepciones', icon: 'inventory', route: '/inventario/recepciones', permission: 'goods_receipts.view' },
+      { label: 'Devoluciones', icon: 'keyboard_return', route: '/inventario/devoluciones', permission: 'supplier_returns.view' },
+      { label: 'Ajustes', icon: 'tune', route: '/inventario/ajustes', permission: 'adjustments.view' },
+      { label: 'Conteos', icon: 'checklist', route: '/inventario/conteos', permission: 'stock_counts.view' },
     ],
   },
   {
