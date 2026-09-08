@@ -22,6 +22,9 @@ use App\Http\Controllers\Api\Inventory\GoodsReceiptController;
 use App\Http\Controllers\Api\Inventory\StockController;
 use App\Http\Controllers\Api\Inventory\StockCountController;
 use App\Http\Controllers\Api\Inventory\SupplierReturnController;
+use App\Http\Controllers\Api\Logistics\NoveltyController;
+use App\Http\Controllers\Api\Logistics\ShipmentController;
+use App\Http\Controllers\Api\Logistics\ShipmentReceiptController;
 use App\Http\Controllers\Api\Payables\CreditNoteController;
 use App\Http\Controllers\Api\Payables\StatementController;
 use App\Http\Controllers\Api\Payables\SupplierInvoiceController;
@@ -101,6 +104,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('quotations', [QuotationController::class, 'store'])->middleware('permission:quotations.create');
         Route::put('quotations/{id}', [QuotationController::class, 'update'])->middleware('permission:quotations.update');
         Route::delete('quotations/{id}', [QuotationController::class, 'destroy'])->middleware('permission:quotations.delete');
+        Route::post('quotations/{id}/send', [QuotationController::class, 'send'])->middleware('permission:quotations.update');
+        Route::post('quotations/{id}/respond', [QuotationController::class, 'respond'])->middleware('permission:quotations.update');
+        Route::get('quotations/{id}/pdf', [QuotationController::class, 'pdf'])->middleware('permission:quotations.view');
         Route::post('quotations/{id}/receive', [QuotationController::class, 'receive'])->middleware('permission:quotations.update');
         Route::post('quotations/{id}/discard', [QuotationController::class, 'discard'])->middleware('permission:quotations.update');
 
@@ -175,6 +181,35 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('stock-counts/{id}/record', [StockCountController::class, 'record'])->middleware('permission:stock_counts.update');
         Route::post('stock-counts/{id}/close', [StockCountController::class, 'close'])->middleware('permission:stock_counts.update');
         Route::post('stock-counts/{id}/cancel', [StockCountController::class, 'cancel'])->middleware('permission:stock_counts.delete');
+    });
+
+    // Logística
+    Route::prefix('logistics')->name('logistics.')->group(function () {
+        // Planillas de viaje
+        Route::get('shipments', [ShipmentController::class, 'index'])->middleware('permission:shipments.view');
+        Route::get('shipments/counts', [ShipmentController::class, 'counts'])->middleware('permission:shipments.view');
+        Route::get('shipments/pending-request-items', [ShipmentController::class, 'pendingRequestItems'])->middleware('permission:shipments.view');
+        Route::get('shipments/in-transit', [ShipmentController::class, 'inTransit'])->middleware('permission:shipments.view');
+        Route::get('shipments/{id}', [ShipmentController::class, 'show'])->middleware('permission:shipments.view');
+        Route::get('shipments/{id}/pdf', [ShipmentController::class, 'pdf'])->middleware('permission:shipments.view');
+        Route::post('shipments', [ShipmentController::class, 'store'])->middleware('permission:shipments.create');
+        Route::put('shipments/{id}', [ShipmentController::class, 'update'])->middleware('permission:shipments.update');
+        Route::post('shipments/{id}/dispatch', [ShipmentController::class, 'dispatch'])->middleware('permission:shipments.dispatch');
+        Route::post('shipments/{id}/cancel', [ShipmentController::class, 'cancel'])->middleware('permission:shipments.delete');
+        Route::post('shipments/{id}/close', [ShipmentController::class, 'close'])->middleware('permission:shipments.update');
+
+        // Recepción en destino
+        Route::get('shipment-receipts', [ShipmentReceiptController::class, 'index'])->middleware('permission:shipment_receipts.view');
+        Route::get('shipment-receipts/{id}', [ShipmentReceiptController::class, 'show'])->middleware('permission:shipment_receipts.view');
+        Route::post('shipment-receipts', [ShipmentReceiptController::class, 'store'])->middleware('permission:shipment_receipts.create');
+        Route::put('shipment-receipts/{id}', [ShipmentReceiptController::class, 'update'])->middleware('permission:shipment_receipts.update');
+        Route::post('shipment-receipts/{id}/confirm', [ShipmentReceiptController::class, 'confirm'])->middleware('permission:shipment_receipts.update');
+        Route::post('shipment-receipts/{id}/cancel', [ShipmentReceiptController::class, 'cancel'])->middleware('permission:shipment_receipts.delete');
+
+        // Novedades
+        Route::get('novelties', [NoveltyController::class, 'index'])->middleware('permission:novelties.view');
+        Route::get('novelties/counts', [NoveltyController::class, 'counts'])->middleware('permission:novelties.view');
+        Route::post('novelties/{id}/resolve', [NoveltyController::class, 'resolve'])->middleware('permission:novelties.update');
     });
 
     // Cuentas por pagar

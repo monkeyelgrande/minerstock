@@ -9,6 +9,7 @@ import { CheckboxModule } from 'primeng/checkbox';
 import { DatePickerModule } from 'primeng/datepicker';
 import { DialogModule } from 'primeng/dialog';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { MultiSelectModule } from 'primeng/multiselect';
 import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { TooltipModule } from 'primeng/tooltip';
@@ -49,6 +50,7 @@ interface ItemControls {
   unit_price: FormControl<number | null>;
   tax_rate: FormControl<number>;
   delivery_days: FormControl<number | null>;
+  not_quoted: FormControl<boolean>;
   notes: FormControl<string | null>;
 }
 type ItemGroup = FormGroup<ItemControls>;
@@ -67,12 +69,15 @@ interface PendingGroup {
   items: PendingRequestItem[];
 }
 
+/** Modo de guardado: borrador, marcar recibida o enviar la solicitud al proveedor. */
+type SaveMode = 'draft' | 'receive' | 'send';
+
 /** Formulario de cotización a página completa: proveedor, vigencia e ítems con conversión de unidades. */
 @Component({
   selector: 'app-quotation-form',
   imports: [
     CurrencyPipe, DatePipe, DecimalPipe, FormsModule, ReactiveFormsModule,
-    ButtonModule, CheckboxModule, DatePickerModule, DialogModule, InputNumberModule, SelectModule, TextareaModule, TooltipModule,
+    ButtonModule, CheckboxModule, DatePickerModule, DialogModule, InputNumberModule, MultiSelectModule, SelectModule, TextareaModule, TooltipModule,
     AttachmentsComponent, FieldComponent, PageHeaderComponent, ProductPickerComponent, StatusChipComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -108,6 +113,12 @@ export class QuotationFormComponent {
   readonly pendingItems = signal<PendingRequestItem[]>([]);
   readonly pickedIds = signal<Set<number>>(new Set());
 
+  // Diálogo "Enviar solicitud de cotización" (tras guardar)
+  readonly sendOpen = signal(false);
+  readonly sending = signal(false);
+  readonly sendSupplierIds = signal<number[]>([]);
+  readonly savedForSend = signal<Quotation | null>(null);
+
   readonly form = this.fb.group({
     supplier_id: this.fb.control<number | null>(null, Validators.required),
     date: this.fb.control<Date | null>(new Date(), Validators.required),
@@ -126,8 +137,10 @@ export class QuotationFormComponent {
   readonly title = computed(() => (this.isEdit() ? `Editar ${this.quotation()?.number ?? 'cotización'}` : 'Nueva cotización'));
   readonly status = computed(() => this.quotation()?.status ?? 'borrador');
   readonly statusLabel = computed(() => this.quotation()?.status_label ?? 'Borrador');
-  /** "Guardar y marcar recibida" solo aplica a borradores (o al crear). */
-  readonly canReceive = computed(() => !this.isEdit() || this.status() === 'borrador');
+  /** Modo borrador (crear o editar un borrador): permite enviar al proveedor o marcar recibida. */
+  readonly isDraftMode = computed(() => !this.isEdit() || this.status() === 'borrador');
+  /** El checkbox "No cotizó" solo tiene sentido al reeditar precios de una recibida. */
+  readonly showNotQuoted = computed(() => this.status() === 'recibida');
 
   readonly taxOptions = computed(() => {
     const rates = new Set<number>([0, 5, 19, this.defaultTaxRate()]);
@@ -135,6 +148,25 @@ export class QuotationFormComponent {
   });
 
   private readonly items = computed(() => (this.formValue().items ?? []) as ItemValue[]);
+
+  /** "Guardar y marcar recibida" solo cuando todos los ítems tienen precio (o "no cotizó"). */
+  readonly allPriced = computed(() => {
+    const rows = this.items();
+    return rows.length > 0 && rows.every((r) => r.not_quoted || (r.unit_price !== null && r.unit_price !== undefined));
+  });
+
+  /** Proveedores adicionales elegibles en el diálogo de envío (excluye al destinatario). */
+  readonly sendSupplierOptions = computed(() => {
+    const currentId = this.savedForSend()?.supplier_id;
+    return this.suppliers().filter((s) => s.id !== currentId);
+  });
+
+  /** Nombre del proveedor destinatario del envío. */
+  readonly sendTargetName = computed(() => {
+    const q = this.savedForSend();
+    if (!q) return '';
+    return q.supplier?.name ?? this.suppliers().find((s) => s.id === q.supplier_id)?.name ?? '';
+  });
 
   /** Opciones de unidad por fila (unidad base + alternas del producto). */
   readonly unitOptionsByRow = computed(() => this.items().map((row) => this.unitOptionsFor(row.product)));
@@ -144,8 +176,10 @@ export class QuotationFormComponent {
     this.items().map((row, i) => this.unitOptionsByRow()[i].find((u) => u.id === row.unit_id)?.factor ?? 1),
   );
 
-  /** Subtotal por fila (cantidad × precio, sin IVA). */
-  readonly lineTotals = computed(() => this.items().map((row) => (Number(row.quantity) || 0) * (Number(row.unit_price) || 0)));
+  /** Subtotal por fila (cantidad × precio, sin IVA; 0 si no cotizó o sin precio). */
+  readonly lineTotals = computed(() =>
+    this.items().map((row) => (row.not_quoted ? 0 : (Number(row.quantity) || 0) * (Number(row.unit_price) || 0))),
+  );
 
   readonly totals = computed(() => {
     const rows = this.items();
@@ -276,10 +310,21 @@ export class QuotationFormComponent {
       request_number: this.fb.control<string | null>(init.request_number ?? null),
       unit_id: this.fb.control<number | null>(init.unit_id ?? null, Validators.required),
       quantity: this.fb.control<number | null>(init.quantity ?? null, [Validators.required, Validators.min(0.0001)]),
-      unit_price: this.fb.control<number | null>(init.unit_price ?? null, [Validators.required, Validators.min(0)]),
+      unit_price: this.fb.control<number | null>(init.unit_price ?? null, Validators.min(0)),
       tax_rate: this.fb.nonNullable.control<number>(init.tax_rate ?? this.defaultTaxRate()),
       delivery_days: this.fb.control<number | null>(init.delivery_days ?? null, Validators.min(0)),
+      not_quoted: this.fb.nonNullable.control<boolean>(init.not_quoted ?? false),
       notes: this.fb.control<string | null>(init.notes ?? null),
+    });
+    // "No cotizó" limpia y bloquea el precio de la fila.
+    if (g.controls.not_quoted.value) g.controls.unit_price.disable();
+    g.controls.not_quoted.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((nq) => {
+      if (nq) {
+        g.controls.unit_price.setValue(null);
+        g.controls.unit_price.disable();
+      } else {
+        g.controls.unit_price.enable();
+      }
     });
     // Al cambiar el producto (fila libre) se propone la unidad de compra por defecto.
     g.controls.product.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((p) => {
@@ -296,9 +341,10 @@ export class QuotationFormComponent {
       request_number: i.request?.number ?? null,
       unit_id: i.unit_id,
       quantity: Number(i.quantity),
-      unit_price: Number(i.unit_price),
+      unit_price: i.unit_price !== null && i.unit_price !== undefined ? Number(i.unit_price) : null,
       tax_rate: Number(i.tax_rate),
       delivery_days: i.delivery_days,
+      not_quoted: i.not_quoted,
       notes: i.notes,
     });
   }
@@ -419,7 +465,7 @@ export class QuotationFormComponent {
 
   // ---------- Guardar ----------
 
-  save(andReceive = false): void {
+  save(mode: SaveMode = 'draft'): void {
     this.submitted.set(true);
     if (!this.itemsArray.length) {
       this.toast.warn('Sin ítems', 'Agrega al menos un ítem a la cotización.');
@@ -444,9 +490,10 @@ export class QuotationFormComponent {
         purchase_request_item_id: r.purchase_request_item_id ?? null,
         unit_id: r.unit_id as number,
         quantity: Number(r.quantity),
-        unit_price: Number(r.unit_price),
+        unit_price: r.not_quoted || r.unit_price === null || r.unit_price === undefined ? null : Number(r.unit_price),
         tax_rate: Number(r.tax_rate ?? 0),
         delivery_days: r.delivery_days ?? null,
+        not_quoted: !!r.not_quoted,
         notes: r.notes?.trim() || null,
       })),
     };
@@ -454,8 +501,15 @@ export class QuotationFormComponent {
     const req = current ? this.api.updateQuotation(current.id, payload) : this.api.createQuotation(payload);
     req.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (saved) => {
-        if (andReceive && saved.status === 'borrador') {
+        if (mode === 'receive' && saved.status === 'borrador') {
           this.receive(saved);
+          return;
+        }
+        if (mode === 'send' && saved.status === 'borrador') {
+          this.saving.set(false);
+          this.savedForSend.set(saved);
+          this.sendSupplierIds.set([]);
+          this.sendOpen.set(true);
           return;
         }
         this.saving.set(false);
@@ -484,6 +538,55 @@ export class QuotationFormComponent {
           this.handleError(err);
           // Ya quedó guardada: llevamos al detalle para que pueda marcarla desde allí.
           void this.router.navigate(['/compras/cotizaciones', saved.id]);
+        },
+      });
+  }
+
+  // ---------- Enviar solicitud al proveedor ----------
+
+  /** Cierre del diálogo (X o máscara): la cotización ya quedó guardada, vamos al detalle. */
+  onSendVisibleChange(visible: boolean): void {
+    if (visible) return;
+    this.sendOpen.set(false);
+    this.goToSaved();
+  }
+
+  cancelSend(): void {
+    this.sendOpen.set(false);
+    this.goToSaved();
+  }
+
+  private goToSaved(): void {
+    const q = this.savedForSend();
+    this.savedForSend.set(null);
+    if (q) {
+      this.toast.success('Cotización guardada sin enviar.', q.number);
+      void this.router.navigate(['/compras/cotizaciones', q.id]);
+    }
+  }
+
+  confirmSend(): void {
+    const q = this.savedForSend();
+    if (!q) return;
+    this.sending.set(true);
+    this.api
+      .sendQuotation(q.id, this.sendSupplierIds())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          this.sending.set(false);
+          this.savedForSend.set(null);
+          this.sendOpen.set(false);
+          this.toast.success(res.message, q.number);
+          if (res.data.length > 1) {
+            void this.router.navigate(['/compras/cotizaciones'], { queryParams: { status: 'enviada' } });
+          } else {
+            void this.router.navigate(['/compras/cotizaciones', q.id]);
+          }
+        },
+        error: (err: unknown) => {
+          this.sending.set(false);
+          this.handleError(err);
         },
       });
   }

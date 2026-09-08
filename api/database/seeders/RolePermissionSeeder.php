@@ -35,6 +35,10 @@ class RolePermissionSeeder extends Seeder
         'supplier_invoices.view', 'supplier_invoices.create', 'supplier_invoices.update', 'supplier_invoices.delete',
         'supplier_payments.view', 'supplier_payments.create', 'supplier_payments.delete',
         'supplier_credit_notes.view', 'supplier_credit_notes.create', 'supplier_credit_notes.update', 'supplier_credit_notes.delete',
+        // Logística (fase 4)
+        'shipments.view', 'shipments.create', 'shipments.update', 'shipments.delete', 'shipments.dispatch',
+        'shipment_receipts.view', 'shipment_receipts.create', 'shipment_receipts.update', 'shipment_receipts.delete',
+        'novelties.view', 'novelties.update',
     ];
 
     public function run(): void
@@ -69,11 +73,17 @@ class RolePermissionSeeder extends Seeder
             'supplier_credit_notes.view', 'supplier_credit_notes.create', 'supplier_credit_notes.update', 'supplier_credit_notes.delete',
         ];
         $payablesViews = ['supplier_invoices.view', 'supplier_payments.view', 'supplier_credit_notes.view'];
+        $logisticsAll = [
+            'shipments.view', 'shipments.create', 'shipments.update', 'shipments.delete', 'shipments.dispatch',
+            'shipment_receipts.view', 'shipment_receipts.create', 'shipment_receipts.update', 'shipment_receipts.delete',
+            'novelties.view', 'novelties.update',
+        ];
+        $logisticsViews = ['shipments.view', 'shipment_receipts.view', 'novelties.view'];
 
         $matrix = [
             'admin' => $all,
             'solicitante' => array_merge(['products.view', 'product_categories.view', 'units.view', 'warehouses.view', 'sites.view'], $requestsBasic),
-            'aprobador' => array_merge($catalogViews, $purchasingViews, ['purchase_requests.approve', 'purchase_orders.approve'], $inventoryViews),
+            'aprobador' => array_merge($catalogViews, $purchasingViews, ['purchase_requests.approve', 'purchase_orders.approve'], $inventoryViews, $logisticsViews),
             'comprador' => array_merge($catalogViews, $requestsBasic, [
                 'suppliers.create', 'suppliers.update', 'suppliers.delete',
                 'products.create', 'products.update',
@@ -82,10 +92,10 @@ class RolePermissionSeeder extends Seeder
                 'quotations.view', 'quotations.create', 'quotations.update', 'quotations.delete',
                 'purchase_orders.view', 'purchase_orders.create', 'purchase_orders.update', 'purchase_orders.delete', 'purchase_orders.issue',
                 'approvals.view',
-            ], $receiptsAll, $returnsAll, ['stock.view', 'adjustments.view', 'stock_counts.view'], $payablesViews),
+            ], $receiptsAll, $returnsAll, ['stock.view', 'adjustments.view', 'stock_counts.view'], $payablesViews, $logisticsAll),
             'tesoreria' => array_merge(['suppliers.view', 'purchase_orders.view', 'goods_receipts.view', 'supplier_returns.view', 'stock.view'], $payablesAll),
-            'bodeguero' => array_merge($catalogViews, ['recipients.create', 'recipients.update'], $requestsBasic, $receiptsAll, $adjustmentsAll, $countsAll, ['stock.view', 'supplier_returns.view']),
-            'consulta' => array_merge($catalogViews, $purchasingViews, $inventoryViews, $payablesViews),
+            'bodeguero' => array_merge($catalogViews, ['recipients.create', 'recipients.update'], $requestsBasic, $receiptsAll, $adjustmentsAll, $countsAll, ['stock.view', 'supplier_returns.view'], $logisticsAll),
+            'consulta' => array_merge($catalogViews, $purchasingViews, $inventoryViews, $payablesViews, $logisticsViews),
         ];
 
         foreach (config('minerstock.roles') as $name => $label) {

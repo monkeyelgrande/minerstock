@@ -17,6 +17,7 @@ import {
   PurchaseRequestPayload,
   Quotation,
   QuotationPayload,
+  QuotationResponsePayload,
 } from '../models/purchasing.model';
 
 /** Endpoints del módulo Compras (/api/purchasing). */
@@ -78,6 +79,21 @@ export class PurchasingApi {
 
   quotationAction(id: number, action: 'receive' | 'discard'): Observable<Quotation> {
     return this.api.post<Single<Quotation>>(`purchasing/quotations/${id}/${action}`).pipe(map((r) => r.data));
+  }
+
+  /** Envía la solicitud al proveedor y opcionalmente la duplica para otros proveedores. */
+  sendQuotation(id: number, additionalSupplierIds: number[] = []): Observable<{ message: string; data: Quotation[] }> {
+    return this.api.post(`purchasing/quotations/${id}/send`, { additional_supplier_ids: additionalSupplierIds });
+  }
+
+  /** Registra la respuesta del proveedor (precios por ítem o "no cotizó"). */
+  respondQuotation(id: number, body: QuotationResponsePayload): Observable<Quotation> {
+    return this.api.post<Single<Quotation>>(`purchasing/quotations/${id}/respond`, body).pipe(map((r) => r.data));
+  }
+
+  /** PDF "Solicitud de cotización" para enviar al proveedor. */
+  quotationPdf(id: number): Observable<Blob> {
+    return this.http.get(this.api.url(`purchasing/quotations/${id}/pdf`), { responseType: 'blob' });
   }
 
   // ---------- Comparativa ----------

@@ -123,14 +123,19 @@ class PurchaseRequestService
         return $request;
     }
 
-    /** Recalcula el estado según lo ordenado (aprobada ↔ en proceso). */
+    /** Recalcula el estado según lo ordenado y lo despachado (aprobada ↔ en proceso ↔ atendida). */
     public function recalcStatus(PurchaseRequest $request): void
     {
-        if (! in_array($request->status, [S::Aprobada, S::EnProceso], true)) {
+        if (! in_array($request->status, [S::Aprobada, S::EnProceso, S::Atendida], true)) {
             return;
         }
-        $ordered = $request->items()->where('qty_ordered_base', '>', 0)->exists();
-        $request->forceFill(['status' => $ordered ? S::EnProceso : S::Aprobada])->save();
+        $items = $request->items()->get();
+        $fullyShipped = $items->isNotEmpty()
+            && $items->every(fn ($i) => (float) $i->qty_shipped_base + 0.0005 >= (float) $i->qty_base);
+        $inProgress = $items->contains(fn ($i) => (float) $i->qty_ordered_base > 0 || (float) $i->qty_shipped_base > 0);
+
+        $status = $fullyShipped ? S::Atendida : ($inProgress ? S::EnProceso : S::Aprobada);
+        $request->forceFill(['status' => $status])->save();
     }
 
     private function decide(PurchaseRequest $request, User $user, string $status, ?string $comment): void

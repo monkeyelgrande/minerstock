@@ -2,7 +2,7 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ConfirmationService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
@@ -21,7 +21,15 @@ import { CrudToolbarComponent } from '../../../shared/components/crud-toolbar.co
 import { PageHeaderComponent } from '../../../shared/components/page-header.component';
 import { StatusChipComponent } from '../../../shared/components/status-chip.component';
 
-/** Listado de cotizaciones de proveedores con filtros por proveedor, estado y vigencia. */
+/** Pestaña de estado del listado. */
+interface StatusTab {
+  key: string;
+  label: string;
+  /** Estado que filtra la pestaña; null = todas. */
+  status: QuotationStatus | null;
+}
+
+/** Listado de cotizaciones de proveedores con pestañas por estado y filtros por proveedor y vigencia. */
 @Component({
   selector: 'app-quotations-page',
   imports: [
@@ -35,17 +43,19 @@ export class QuotationsPageComponent {
   private readonly api = inject(PurchasingApi);
   private readonly catalog = inject(CatalogApi);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmationService);
   private readonly destroyRef = inject(DestroyRef);
   readonly auth = inject(AuthService);
 
-  readonly statusOptions: { label: string; value: QuotationStatus | null }[] = [
-    { label: 'Todas', value: null },
-    { label: 'Borrador', value: 'borrador' },
-    { label: 'Recibida', value: 'recibida' },
-    { label: 'Seleccionada', value: 'seleccionada' },
-    { label: 'Descartada', value: 'descartada' },
+  readonly tabs: StatusTab[] = [
+    { key: 'all', label: 'Todas', status: null },
+    { key: 'borrador', label: 'Borrador', status: 'borrador' },
+    { key: 'enviada', label: 'Enviadas', status: 'enviada' },
+    { key: 'recibida', label: 'Con respuesta', status: 'recibida' },
+    { key: 'seleccionada', label: 'Seleccionadas', status: 'seleccionada' },
+    { key: 'descartada', label: 'Descartadas', status: 'descartada' },
   ];
 
   // Listado
@@ -55,7 +65,7 @@ export class QuotationsPageComponent {
   readonly suppliers = signal<Supplier[]>([]);
   readonly search = signal('');
   readonly supplierId = signal<number | null>(null);
-  readonly status = signal<QuotationStatus | null>(null);
+  readonly tab = signal('all');
   readonly onlyValid = signal(false);
   readonly page = signal(1);
   readonly perPage = signal(20);
@@ -64,12 +74,15 @@ export class QuotationsPageComponent {
   readonly canCreate = computed(() => this.auth.can('quotations.create'));
   readonly canUpdate = computed(() => this.auth.can('quotations.update'));
   readonly canDelete = computed(() => this.auth.can('quotations.delete'));
-  readonly hasFilters = computed(() => !!this.search() || this.supplierId() !== null || this.status() !== null || this.onlyValid());
+  readonly hasFilters = computed(() => !!this.search() || this.supplierId() !== null || this.tab() !== 'all' || this.onlyValid());
 
   private readonly search$ = new Subject<string>();
   private lastSearch = '';
 
   constructor() {
+    // Pestaña inicial desde `?status=`.
+    const initial = this.route.snapshot.queryParamMap.get('status');
+    if (initial && this.tabs.some((t) => t.key === initial)) this.tab.set(initial);
     this.search$
       .pipe(debounceTime(350), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
@@ -92,14 +105,21 @@ export class QuotationsPageComponent {
     return (this.page() - 1) * this.perPage();
   }
 
-  setSupplier(id: number | null): void {
-    this.supplierId.set(id);
+  selectTab(key: string): void {
+    if (this.tab() === key) return;
+    this.tab.set(key);
     this.page.set(1);
     this.load();
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { status: key === 'all' ? null : key },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
-  setStatus(s: QuotationStatus | null): void {
-    this.status.set(s);
+  setSupplier(id: number | null): void {
+    this.supplierId.set(id);
     this.page.set(1);
     this.load();
   }
@@ -124,11 +144,12 @@ export class QuotationsPageComponent {
   load(): void {
     this.loading.set(true);
     const sort = this.sort();
+    const status = this.tabs.find((t) => t.key === this.tab())?.status ?? null;
     this.api
       .quotations({
         search: this.search() || undefined,
         supplier_id: this.supplierId() ?? undefined,
-        status: this.status() ?? undefined,
+        status: status ?? undefined,
         only_valid: this.onlyValid() ? 1 : undefined,
         page: this.page(),
         per_page: this.perPage(),
@@ -146,6 +167,11 @@ export class QuotationsPageComponent {
       });
   }
 
+  /** El total aún no aplica en solicitudes sin precios (borrador/enviada con total 0). */
+  showsNoPrices(row: Quotation): boolean {
+    return Number(row.total) === 0 && (row.status === 'borrador' || row.status === 'enviada');
+  }
+
   goCreate(): void {
     void this.router.navigate(['/compras/cotizaciones/nueva']);
   }
@@ -156,6 +182,19 @@ export class QuotationsPageComponent {
 
   goEdit(row: Quotation): void {
     void this.router.navigate(['/compras/cotizaciones', row.id, 'editar']);
+  }
+
+  /** Abre el detalle con el diálogo "Registrar respuesta" abierto. */
+  goRespond(row: Quotation): void {
+    void this.router.navigate(['/compras/cotizaciones', row.id], { queryParams: { respond: 1 } });
+  }
+
+  /** Abre el PDF "Solicitud de cotización" en una pestaña nueva. */
+  downloadPdf(row: Quotation): void {
+    this.api
+      .quotationPdf(row.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((blob) => window.open(URL.createObjectURL(blob)));
   }
 
   remove(row: Quotation): void {

@@ -1,0 +1,166 @@
+<app-page-header
+  title="Recepción en mina"
+  subtitle="Verifica la mercancía que llega contra la planilla del chofer"
+  [crumbs]="[{ label: 'Logística' }, { label: 'Recepción en mina' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Registrar recepción" icon="pi pi-plus" (onClick)="goCreate()" />
+  }
+</app-page-header>
+
+<!-- ================= Planillas por recibir ================= -->
+@if (pending().length) {
+  <div class="card mb-4 border-[#FED7AA] bg-[#FFF7ED]/60">
+    <div class="card-header !border-[#FED7AA]">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-[#C2410C] !text-[20px]">local_shipping</span>
+        <span class="card-title">Planillas por recibir</span>
+      </div>
+      <span class="text-xs text-ink-3 tabular">{{ pending().length }} en camino</span>
+    </div>
+    <ul class="divide-y divide-[#FED7AA]/60">
+      @for (s of pending(); track s.id) {
+        <li class="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2.5 text-sm">
+          <a class="doc-link" [routerLink]="['/logistica/planillas', s.id]">{{ s.number }}</a>
+          <span class="text-ink-2">
+            {{ s.origin?.code ?? s.origin?.name ?? '—' }}
+            <span class="material-symbols-outlined !text-[14px] align-middle text-ink-3">arrow_forward</span>
+            {{ s.destination?.code ?? s.destination?.name ?? '—' }}
+          </span>
+          <span class="text-ink-3 text-xs">
+            @if (s.vehicle?.plate) { <span class="tabular">{{ s.vehicle?.plate }}</span> }
+            @if (s.vehicle?.plate && s.driver?.name) { · }
+            {{ s.driver?.name }}
+          </span>
+          <span class="text-ink-3 text-xs tabular">Despachada {{ s.dispatched_at | date: 'dd/MM/yyyy HH:mm' }}</span>
+          <span class="flex-1"></span>
+          @if (canCreate()) {
+            <p-button label="Recibir" icon="pi pi-download" size="small" severity="secondary" [outlined]="true" (onClick)="goCreate(s.id)" />
+          }
+        </li>
+      }
+    </ul>
+  </div>
+}
+
+<!-- ================= Pestañas por estado ================= -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="flex items-center gap-2 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+    </button>
+  }
+</div>
+
+<app-crud-toolbar
+  [(search)]="search"
+  searchPlaceholder="Buscar por número de recepción o planilla…"
+  [showActiveFilter]="false"
+  [createLabel]="null"
+>
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Bodega destino"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event)"
+    styleClass="w-52"
+  />
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th class="w-32">Número</th>
+        <th class="w-32">Planilla</th>
+        <th>Origen → Destino</th>
+        <th class="w-36">Fecha recepción</th>
+        <th class="w-20 text-right">Ítems</th>
+        <th class="w-36 text-center">Planilla firmada</th>
+        <th class="w-36">Estado</th>
+        <th class="w-28 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/logistica/recepcion', row.id]">{{ row.number }}</a>
+        </td>
+        <td>
+          @if (row.shipment) {
+            <a class="doc-link" [routerLink]="['/logistica/planillas', row.shipment.id]">{{ row.shipment.number }}</a>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td>
+          <div class="text-ink">
+            {{ row.shipment?.origin?.name ?? '—' }}
+            <span class="material-symbols-outlined !text-[14px] align-middle text-ink-3">arrow_forward</span>
+            {{ row.shipment?.destination?.name ?? '—' }}
+          </div>
+          <div class="text-xs text-ink-3">
+            @if (row.shipment?.vehicle?.plate) { <span class="tabular">{{ row.shipment?.vehicle?.plate }}</span> }
+            @if (row.shipment?.vehicle?.plate && row.shipment?.driver?.name) { · }
+            {{ row.shipment?.driver?.name }}
+          </div>
+        </td>
+        <td class="tabular text-ink-2">{{ row.received_at | date: 'dd/MM/yyyy' }}</td>
+        <td class="tabular text-right text-ink-2">{{ row.items_count ?? '—' }}</td>
+        <td class="text-center">
+          @if (row.has_signed_sheet) {
+            <span class="material-symbols-outlined text-[#059669] !text-[20px]" pTooltip="Planilla firmada adjunta">check_circle</span>
+          } @else {
+            <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]" pTooltip="Falta la foto de la planilla firmada">warning</span>
+          }
+        </td>
+        <td><app-chip [tone]="docTone(row.status)" [label]="row.status_label" /></td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver detalle" (onClick)="goDetail(row)" />
+          @if (row.is_editable && canUpdate()) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="goEdit(row)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="8" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">package_2</span>
+            <span class="text-sm">No hay recepciones que coincidan con los filtros.</span>
+            @if (canCreate() && tab() === 'all' && !search()) {
+              <p-button label="Registrar la primera recepción" icon="pi pi-plus" [text]="true" size="small" (onClick)="goCreate()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

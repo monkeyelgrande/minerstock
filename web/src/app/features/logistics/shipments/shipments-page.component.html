@@ -1,0 +1,206 @@
+<app-page-header
+  title="Planillas de viaje"
+  subtitle="Despachos entre bodegas con vehículo y chofer"
+  [crumbs]="[{ label: 'Logística' }, { label: 'Planillas de viaje' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Nueva planilla" icon="pi pi-plus" (onClick)="goCreate()" />
+  }
+</app-page-header>
+
+<!-- Pestañas por estado -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="flex items-center gap-2 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+      @if (t.key === 'despachada') {
+        <span class="text-[11px] text-ink-3 hidden lg:inline">(en tránsito)</span>
+      }
+      <span
+        class="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-semibold tabular"
+        [class.bg-amber-100]="tab() === t.key"
+        [class.text-amber-800]="tab() === t.key"
+        [class.bg-slate-100]="tab() !== t.key"
+        [class.text-slate-600]="tab() !== t.key"
+      >{{ countFor(t) }}</span>
+    </button>
+  }
+</div>
+
+<app-crud-toolbar
+  [(search)]="search"
+  searchPlaceholder="Buscar por número, chofer, placa o producto…"
+  [showActiveFilter]="false"
+  [createLabel]="null"
+>
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Origen"
+    [showClear]="true"
+    [ngModel]="originId()"
+    (ngModelChange)="setOrigin($event)"
+    styleClass="w-48"
+  />
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Destino"
+    [showClear]="true"
+    [ngModel]="destinationId()"
+    (ngModelChange)="setDestination($event)"
+    styleClass="w-48"
+  />
+  <div class="flex items-center gap-1.5">
+    <p-datepicker
+      [ngModel]="dateFrom()"
+      (ngModelChange)="setDateFrom($event)"
+      dateFormat="dd/mm/yy"
+      [showIcon]="true"
+      [showClear]="true"
+      [maxDate]="dateTo()"
+      appendTo="body"
+      placeholder="Desde"
+      styleClass="w-40"
+      inputStyleClass="w-full"
+    />
+    <span class="text-ink-3 text-xs">—</span>
+    <p-datepicker
+      [ngModel]="dateTo()"
+      (ngModelChange)="setDateTo($event)"
+      dateFormat="dd/mm/yy"
+      [showIcon]="true"
+      [showClear]="true"
+      [minDate]="dateFrom()"
+      appendTo="body"
+      placeholder="Hasta"
+      styleClass="w-40"
+      inputStyleClass="w-full"
+    />
+  </div>
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="created_at"
+    [sortOrder]="-1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="number" class="w-32">Número <p-sortIcon field="number" /></th>
+        <th>Origen → Destino</th>
+        <th class="w-28">Vehículo</th>
+        <th>Chofer</th>
+        <th pSortableColumn="dispatched_at" class="w-40">Despachada <p-sortIcon field="dispatched_at" /></th>
+        <th class="w-16 text-right">Ítems</th>
+        <th class="w-32 text-right">Valor</th>
+        <th class="w-32">% recibido</th>
+        <th class="w-40">Estado</th>
+        <th class="w-32 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/logistica/planillas', row.id]">{{ row.number }}</a>
+        </td>
+        <td>
+          <div class="flex items-center gap-1.5 text-sm text-ink">
+            <span class="font-medium tabular">{{ row.origin?.code ?? '—' }}</span>
+            <span class="material-symbols-outlined !text-[16px] text-ink-3">arrow_forward</span>
+            <span class="font-medium tabular">{{ row.destination?.code ?? '—' }}</span>
+          </div>
+          <div class="text-xs text-ink-3 truncate max-w-[260px]">{{ row.origin?.name }} → {{ row.destination?.name }}</div>
+        </td>
+        <td class="tabular text-ink-2">{{ row.vehicle?.plate ?? '—' }}</td>
+        <td class="text-ink-2">{{ row.driver?.name ?? '—' }}</td>
+        <td class="tabular text-ink-2">{{ row.dispatched_at ? (row.dispatched_at | date: 'dd/MM/yyyy HH:mm') : '—' }}</td>
+        <td class="tabular text-right text-ink-2">{{ row.items_count ?? '—' }}</td>
+        <td class="tabular text-right font-medium text-ink">{{ row.total_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+        <td>
+          @if (row.dispatched_at) {
+            <div class="flex items-center gap-2">
+              <div class="relative flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full"
+                  [class.bg-emerald-500]="pct(row) >= 100"
+                  [class.bg-orange-500]="pct(row) > 0 && pct(row) < 100"
+                  [style.width.%]="pct(row)"
+                ></div>
+              </div>
+              <span class="text-[11px] tabular text-ink-3 w-9 text-right">{{ pct(row) }}%</span>
+            </div>
+          } @else {
+            <span class="text-ink-3 text-xs">—</span>
+          }
+        </td>
+        <td><app-chip [tone]="shipmentTone(row.status)" [label]="row.status_label" /></td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver detalle" (onClick)="goDetail(row)" />
+          @if (row.is_editable && canUpdate()) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="goEdit(row)" />
+          }
+          @if (row.status === 'borrador' && canDispatch()) {
+            <p-button
+              icon="pi pi-truck"
+              [text]="true"
+              [rounded]="true"
+              severity="secondary"
+              size="small"
+              pTooltip="Despachar"
+              [loading]="dispatching() === row.id"
+              (onClick)="dispatch(row)"
+            />
+          }
+          <p-button
+            icon="pi pi-file-pdf"
+            [text]="true"
+            [rounded]="true"
+            severity="secondary"
+            size="small"
+            pTooltip="Ver PDF"
+            [loading]="downloading() === row.id"
+            (onClick)="openPdf(row)"
+          />
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="10" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">local_shipping</span>
+            <span class="text-sm">No hay planillas que coincidan con los filtros.</span>
+            @if (canCreate() && tab() === 'all' && !search()) {
+              <p-button label="Crear la primera planilla" icon="pi pi-plus" [text]="true" size="small" (onClick)="goCreate()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

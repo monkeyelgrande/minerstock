@@ -1,0 +1,212 @@
+<app-page-header
+  title="Novedades de transporte"
+  subtitle="Faltantes, dañados y sobrantes detectados al recibir en mina"
+  [crumbs]="[{ label: 'Logística' }, { label: 'Novedades' }]"
+>
+  <span class="chip chip-partial !h-7 !px-3 tabular" pTooltip="Novedades sin resolver">
+    <span class="material-symbols-outlined !text-[16px] mr-1">error</span>
+    {{ openCount() }} abierta(s)
+  </span>
+  <span class="chip chip-success !h-7 !px-3 tabular" pTooltip="Novedades resueltas">
+    <span class="material-symbols-outlined !text-[16px] mr-1">check_circle</span>
+    {{ resolvedCount() }} resuelta(s)
+  </span>
+</app-page-header>
+
+<!-- ================= Pestañas por estado ================= -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="flex items-center gap-2 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+      @if (t.key === 'abierta' && openCount() > 0) {
+        <span class="chip chip-partial !h-5 !px-1.5 tabular">{{ openCount() }}</span>
+      }
+    </button>
+  }
+</div>
+
+<!-- ================= Filtros ================= -->
+<div class="card px-4 py-3 mb-4 flex flex-wrap items-center gap-3">
+  <p-select
+    [options]="typeOptions"
+    optionLabel="label"
+    optionValue="value"
+    placeholder="Tipo de novedad"
+    [showClear]="true"
+    [ngModel]="type()"
+    (ngModelChange)="setType($event)"
+    styleClass="w-48"
+  />
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Bodega destino"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event)"
+    styleClass="w-52"
+  />
+</div>
+
+<!-- ================= Listado ================= -->
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th class="w-28">Tipo</th>
+        <th>Producto</th>
+        <th class="w-28 text-right">Cantidad</th>
+        <th class="w-28">Planilla</th>
+        <th class="w-32">Recepción</th>
+        <th>Ruta / chofer</th>
+        <th class="w-28">Fecha</th>
+        <th class="w-28">Estado</th>
+        <th class="min-w-[180px]">Resolución</th>
+        <th class="w-28 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-n>
+      <tr>
+        <td><app-chip [tone]="noveltyTone(n.type)" [label]="n.type_label" /></td>
+        <td>
+          <div class="text-sm font-medium text-ink">{{ n.product?.name ?? '—' }}</div>
+          <div class="text-xs text-ink-3 tabular">{{ n.product?.sku }}</div>
+          @if (n.description) {
+            <div class="text-xs text-ink-2 italic mt-0.5">{{ n.description }}</div>
+          }
+        </td>
+        <td class="text-right tabular text-ink">
+          {{ n.qty_base | number: '1.0-3' }} <span class="text-xs text-ink-3">{{ n.product?.base_unit }}</span>
+        </td>
+        <td>
+          @if (n.shipment) {
+            <a class="doc-link" [routerLink]="['/logistica/planillas', n.shipment.id]">{{ n.shipment.number }}</a>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td>
+          @if (n.receipt) {
+            <a class="doc-link" [routerLink]="['/logistica/recepcion', n.receipt.id]">{{ n.receipt.number }}</a>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td>
+          <div class="text-sm text-ink">
+            {{ n.shipment?.origin ?? '—' }}
+            <span class="material-symbols-outlined !text-[14px] align-middle text-ink-3">arrow_forward</span>
+            {{ n.shipment?.destination ?? '—' }}
+          </div>
+          @if (n.shipment?.driver) {
+            <div class="text-xs text-ink-3">{{ n.shipment?.driver }}</div>
+          }
+        </td>
+        <td class="tabular text-ink-2">{{ n.receipt?.received_at | date: 'dd/MM/yyyy' }}</td>
+        <td>
+          <app-chip [tone]="n.status === 'resuelta' ? 'success' : 'partial'" [label]="n.status === 'resuelta' ? 'Resuelta' : 'Abierta'" />
+        </td>
+        <td>
+          @if (n.status === 'resuelta') {
+            <div class="text-sm text-ink-2">{{ n.resolution || '—' }}</div>
+            <div class="text-xs text-ink-3">
+              @if (n.resolver) { {{ n.resolver.name }} · }
+              {{ n.resolved_at | date: 'dd/MM/yyyy HH:mm' }}
+            </div>
+          } @else {
+            <span class="text-ink-3 text-sm">Pendiente</span>
+          }
+        </td>
+        <td class="text-right whitespace-nowrap">
+          @if (n.status === 'abierta' && canResolve()) {
+            <p-button label="Resolver" icon="pi pi-check" size="small" severity="secondary" [outlined]="true" (onClick)="openResolve(n)" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="10" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">verified</span>
+            @if (tab() === 'abierta') {
+              <span class="text-sm">No hay novedades abiertas: todo lo recibido llegó completo y en buen estado.</span>
+            } @else {
+              <span class="text-sm">No hay novedades que coincidan con los filtros.</span>
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<!-- ================= Diálogo de resolución ================= -->
+<p-dialog
+  [visible]="!!resolving()"
+  (visibleChange)="!$event && closeResolve()"
+  [modal]="true"
+  [draggable]="false"
+  [style]="{ width: '520px', maxWidth: '95vw' }"
+  header="Resolver novedad"
+>
+  @if (resolving(); as n) {
+    <div class="space-y-3">
+      <div class="flex flex-wrap items-center gap-2 text-sm">
+        <app-chip [tone]="noveltyTone(n.type)" [label]="n.type_label" />
+        <span class="font-medium text-ink">{{ n.product?.name ?? '—' }}</span>
+        <span class="tabular text-ink-2">{{ n.qty_base | number: '1.0-3' }} {{ n.product?.base_unit }}</span>
+        @if (n.shipment) {
+          <span class="text-ink-3">· {{ n.shipment.number }}</span>
+        }
+      </div>
+      @if (n.description) {
+        <p class="text-xs text-ink-2 italic">“{{ n.description }}”</p>
+      }
+      <div>
+        <label class="field-label" for="resolution">¿Cómo se resolvió? (reclamo al proveedor, descuento al chofer, ajuste…)</label>
+        <textarea
+          pTextarea
+          id="resolution"
+          rows="4"
+          class="w-full"
+          maxlength="1000"
+          placeholder="Describe cómo se resolvió la novedad"
+          [ngModel]="resolution()"
+          (ngModelChange)="resolution.set($event)"
+        ></textarea>
+        @if (resolveSubmitted() && !resolution().trim()) {
+          <p class="field-error">Describe cómo se resolvió la novedad.</p>
+        }
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="resolveSaving()" (onClick)="closeResolve()" />
+        <p-button label="Marcar como resuelta" icon="pi pi-check" [loading]="resolveSaving()" (onClick)="saveResolution()" />
+      </div>
+    </div>
+  }
+</p-dialog>

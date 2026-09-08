@@ -17,11 +17,25 @@
   @if (canDiscard()) {
     <p-button label="Descartar" icon="pi pi-ban" severity="secondary" [outlined]="true" [disabled]="acting()" (onClick)="discard()" />
   }
+  <p-button label="PDF solicitud" icon="pi pi-file-pdf" severity="secondary" [outlined]="true" [disabled]="loading()" (onClick)="downloadPdf()" />
   @if (canEdit()) {
     <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [outlined]="true" [disabled]="acting()" (onClick)="goEdit()" />
   }
   @if (canReceive()) {
-    <p-button label="Marcar como recibida" icon="pi pi-check" [loading]="acting()" (onClick)="receive()" />
+    <p-button label="Marcar recibida" icon="pi pi-check" severity="secondary" [outlined]="true" [loading]="acting()" (onClick)="receive()" />
+  }
+  @if (canRespond()) {
+    <p-button
+      label="Registrar respuesta"
+      icon="pi pi-reply"
+      [severity]="quotation()?.status === 'enviada' ? 'primary' : 'secondary'"
+      [outlined]="quotation()?.status !== 'enviada'"
+      [disabled]="acting()"
+      (onClick)="openRespond()"
+    />
+  }
+  @if (canSend()) {
+    <p-button label="Enviar al proveedor" icon="pi pi-send" [disabled]="acting()" (onClick)="openSend()" />
   }
   @if (canCompare()) {
     <p-button label="Ir a comparativa" icon="pi pi-table" [disabled]="acting()" (onClick)="goComparison()" />
@@ -124,14 +138,32 @@
                       <div class="text-[11px] text-ink-3">= {{ it.qty_base | number: '1.0-2' }} {{ it.product?.base_unit }}</div>
                     }
                   </td>
-                  <td class="px-3 py-3 text-sm tabular text-right text-ink">{{ it.unit_price | currency: 'COP' : 'symbol-narrow' : '1.0-2' }}</td>
+                  <td class="px-3 py-3 text-sm tabular text-right text-ink">
+                    @if (it.not_quoted) {
+                      <span class="chip chip-draft !h-5" pTooltip="El proveedor no cotizó este ítem" tooltipPosition="top">No cotizó</span>
+                    } @else if (it.unit_price === null) {
+                      <span class="text-ink-3">—</span>
+                    } @else {
+                      {{ it.unit_price | currency: 'COP' : 'symbol-narrow' : '1.0-2' }}
+                    }
+                  </td>
                   <td class="px-3 py-3 text-sm tabular text-right text-ink-2">
-                    {{ it.base_price | currency: 'COP' : 'symbol-narrow' : '1.0-2' }}
-                    <span class="text-[11px] text-ink-3">/ {{ it.product?.base_unit }}</span>
+                    @if (it.not_quoted || it.base_price === null) {
+                      <span class="text-ink-3">—</span>
+                    } @else {
+                      {{ it.base_price | currency: 'COP' : 'symbol-narrow' : '1.0-2' }}
+                      <span class="text-[11px] text-ink-3">/ {{ it.product?.base_unit }}</span>
+                    }
                   </td>
                   <td class="px-3 py-3 text-sm tabular text-right text-ink-2">{{ it.tax_rate | number: '1.0-2' }}%</td>
                   <td class="px-3 py-3 text-sm tabular text-right text-ink-2">{{ it.delivery_days !== null ? it.delivery_days + ' d' : '—' }}</td>
-                  <td class="px-3 py-3 text-sm tabular text-right font-medium text-ink">{{ it.line_total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-3 py-3 text-sm tabular text-right font-medium text-ink">
+                    @if (it.not_quoted || it.unit_price === null) {
+                      <span class="text-ink-3 font-normal">—</span>
+                    } @else {
+                      {{ it.line_total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+                    }
+                  </td>
                   <td class="px-3 py-3">
                     @if (it.purchase_order_item_id) {
                       <span class="chip chip-info" pTooltip="Ya tiene orden de compra" tooltipPosition="top">En OC</span>
@@ -175,7 +207,7 @@
         type="quotation"
         [documentId]="q.id"
         [items]="q.attachments ?? []"
-        [canEdit]="canEdit()"
+        [canEdit]="canUpdate()"
         hint="Sube la cotización del proveedor en PDF o foto"
         (changed)="reload()"
       />
@@ -187,6 +219,12 @@
             <div class="th-label">Creada por</div>
             <div class="text-ink mt-0.5">{{ q.creator?.name ?? '—' }}</div>
           </div>
+          @if (q.sent_at) {
+            <div>
+              <div class="th-label">Enviada al proveedor</div>
+              <div class="text-ink tabular mt-0.5">{{ q.sent_at | date: 'dd/MM/yyyy HH:mm' }}</div>
+            </div>
+          }
           <div>
             <div class="th-label">Fecha de creación</div>
             <div class="text-ink tabular mt-0.5">{{ q.created_at | date: 'd MMM y, HH:mm' }}</div>
@@ -197,7 +235,13 @@
           </div>
           @if (q.status === 'borrador') {
             <p class="text-xs text-ink-3 border-t border-line pt-3">
-              Marca la cotización como <span class="font-medium text-ink">recibida</span> para que sus precios aparezcan en la comparativa.
+              <span class="font-medium text-ink">Envía</span> la solicitud al proveedor (queda como enviada) o, si ya tienes todos los precios,
+              márcala como <span class="font-medium text-ink">recibida</span> para que entre en la comparativa.
+            </p>
+          } @else if (q.status === 'enviada') {
+            <p class="text-xs text-ink-3 border-t border-line pt-3">
+              Cuando el proveedor responda, usa <span class="font-medium text-ink">Registrar respuesta</span> para capturar sus precios.
+              Si no respondió, puedes descartarla.
             </p>
           } @else if (q.status === 'recibida') {
             <p class="text-xs text-ink-3 border-t border-line pt-3">
@@ -209,3 +253,183 @@
     </div>
   </div>
 }
+
+<!-- ================= Diálogo: enviar solicitud de cotización ================= -->
+<p-dialog
+  [visible]="sendOpen()"
+  (visibleChange)="sendOpen.set($event)"
+  header="Enviar solicitud de cotización"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!sending()"
+  [closable]="!sending()"
+  [style]="{ width: '540px', maxWidth: '95vw' }"
+>
+  <div class="space-y-4">
+    <p class="text-sm text-ink-2">
+      La solicitud quedará marcada como <span class="font-medium text-ink">enviada</span> a
+      <span class="font-medium text-ink">{{ quotation()?.supplier?.name ?? 'este proveedor' }}</span>. Descarga el PDF y compártelo con el proveedor.
+    </p>
+    <div>
+      <label class="th-label block mb-1" for="send_extra_suppliers">Enviar también a estos proveedores</label>
+      <p-multiselect
+        inputId="send_extra_suppliers"
+        [options]="sendSupplierOptions()"
+        optionLabel="name"
+        optionValue="id"
+        [filter]="true"
+        filterBy="name,document_number"
+        filterPlaceholder="Buscar proveedor…"
+        placeholder="Opcional: elige otros proveedores"
+        display="chip"
+        [showClear]="true"
+        appendTo="body"
+        styleClass="w-full"
+        [ngModel]="sendSupplierIds()"
+        (ngModelChange)="sendSupplierIds.set($event ?? [])"
+      />
+      <p class="text-xs text-ink-3 mt-1.5">Se creará una solicitud idéntica por cada proveedor adicional.</p>
+    </div>
+  </div>
+  <div class="pt-4 flex items-center justify-end gap-2">
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="sending()" (onClick)="sendOpen.set(false)" />
+    <p-button
+      [label]="sendSupplierIds().length ? 'Enviar a ' + (sendSupplierIds().length + 1) + ' proveedores' : 'Enviar al proveedor'"
+      icon="pi pi-send"
+      [loading]="sending()"
+      (onClick)="confirmSend()"
+    />
+  </div>
+</p-dialog>
+
+<!-- ================= Diálogo: registrar respuesta del proveedor ================= -->
+<p-dialog
+  [visible]="respondOpen()"
+  (visibleChange)="respondOpen.set($event)"
+  header="Registrar respuesta del proveedor"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!responding()"
+  [closable]="!responding()"
+  [style]="{ width: '960px', maxWidth: '95vw' }"
+  contentStyleClass="!p-0"
+>
+  <div class="px-5 py-3 border-b border-line flex flex-wrap items-center gap-4">
+    <div class="text-sm text-ink-2">
+      Precios de <span class="font-medium text-ink">{{ quotation()?.supplier?.name ?? '—' }}</span>. Marca
+      <span class="font-medium text-ink">No cotizó</span> en los ítems sin oferta.
+    </div>
+    <div class="flex-1"></div>
+    <label class="flex items-center gap-2 text-sm text-ink-2" for="respond_valid_until">
+      Válida hasta
+      <p-datepicker
+        inputId="respond_valid_until"
+        dateFormat="dd/mm/yy"
+        [showIcon]="true"
+        [showClear]="true"
+        appendTo="body"
+        placeholder="dd/mm/aaaa"
+        styleClass="w-44"
+        inputStyleClass="w-full"
+        [ngModel]="respondValidUntil()"
+        (ngModelChange)="respondValidUntil.set($event)"
+      />
+    </label>
+  </div>
+
+  <div class="max-h-[55vh] overflow-y-auto">
+    <table class="w-full min-w-[820px]">
+      <thead class="sticky top-0 z-10">
+        <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+          <th class="th-label text-left px-5 py-2.5">Producto</th>
+          <th class="th-label text-right px-3 py-2.5 w-32">Cantidad</th>
+          <th class="th-label text-center px-3 py-2.5 w-24">No cotizó</th>
+          <th class="th-label text-right px-3 py-2.5 w-44">Precio unitario</th>
+          <th class="th-label text-left px-3 py-2.5 w-24">IVA</th>
+          <th class="th-label text-right px-3 py-2.5 w-28">Plazo (días)</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of respondRows(); track r.id) {
+          <tr class="border-b border-line last:border-b-0 align-middle" [class.opacity-60]="r.not_quoted">
+            <td class="px-5 py-2.5">
+              <div class="text-sm font-medium text-ink">{{ r.productName }}</div>
+              <div class="text-xs text-ink-3 tabular">{{ r.productSku }}</div>
+            </td>
+            <td class="px-3 py-2.5 text-sm tabular text-right text-ink">{{ r.quantity | number: '1.0-4' }} {{ r.unitCode }}</td>
+            <td class="px-3 py-2.5 text-center">
+              <p-checkbox [binary]="true" [ngModel]="r.not_quoted" (ngModelChange)="toggleNotQuoted(r.id, !!$event)" [inputId]="'rnq_' + r.id" />
+            </td>
+            <td class="px-3 py-2.5">
+              <p-inputnumber
+                mode="currency"
+                currency="COP"
+                locale="es-CO"
+                [min]="0"
+                [minFractionDigits]="0"
+                [maxFractionDigits]="2"
+                placeholder="—"
+                styleClass="w-full"
+                inputStyleClass="w-full tabular text-right"
+                [disabled]="r.not_quoted"
+                [ngModel]="r.unit_price"
+                (ngModelChange)="patchRow(r.id, { unit_price: $event })"
+              />
+            </td>
+            <td class="px-3 py-2.5">
+              <p-select
+                [options]="taxOptions"
+                optionLabel="label"
+                optionValue="value"
+                appendTo="body"
+                styleClass="w-full"
+                [disabled]="r.not_quoted"
+                [ngModel]="r.tax_rate"
+                (ngModelChange)="patchRow(r.id, { tax_rate: $event })"
+              />
+            </td>
+            <td class="px-3 py-2.5">
+              <p-inputnumber
+                mode="decimal"
+                [min]="0"
+                [max]="365"
+                [maxFractionDigits]="0"
+                placeholder="—"
+                styleClass="w-full"
+                inputStyleClass="w-full tabular text-right"
+                [disabled]="r.not_quoted"
+                [ngModel]="r.delivery_days"
+                (ngModelChange)="patchRow(r.id, { delivery_days: $event })"
+              />
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="px-5 py-3 border-t border-line flex flex-wrap items-center gap-4">
+    <dl class="flex items-center gap-5 text-sm">
+      <div class="flex items-center gap-1.5">
+        <dt class="text-ink-3">Subtotal</dt>
+        <dd class="tabular text-ink-2">{{ respondTotals().subtotal | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <dt class="text-ink-3">IVA</dt>
+        <dd class="tabular text-ink-2">{{ respondTotals().tax | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <dt class="font-semibold text-ink">Total</dt>
+        <dd class="tabular font-semibold text-ink">{{ respondTotals().total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+      </div>
+    </dl>
+    <div class="flex-1"></div>
+    @if (!respondValid()) {
+      <span class="text-xs text-ink-3">Cada ítem necesita precio o "No cotizó" (al menos uno con precio).</span>
+    }
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="responding()" (onClick)="respondOpen.set(false)" />
+    <p-button label="Guardar respuesta" icon="pi pi-check" [disabled]="!respondValid()" [loading]="responding()" (onClick)="submitRespond()" />
+  </div>
+</p-dialog>

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['supplier_id', 'date', 'valid_until', 'status', 'subtotal', 'tax', 'total', 'notes', 'created_by'])]
+#[Fillable(['supplier_id', 'date', 'valid_until', 'status', 'sent_at', 'subtotal', 'tax', 'total', 'notes', 'created_by'])]
 class Quotation extends Model
 {
     use HasAttachments, HasDocumentNumber, LogsChanges;
@@ -24,6 +24,7 @@ class Quotation extends Model
             'status' => QuotationStatus::class,
             'date' => 'date:Y-m-d',
             'valid_until' => 'date:Y-m-d',
+            'sent_at' => 'datetime',
             'subtotal' => 'decimal:2',
             'tax' => 'decimal:2',
             'total' => 'decimal:2',
@@ -50,6 +51,9 @@ class Quotation extends Model
         $subtotal = 0.0;
         $tax = 0.0;
         foreach ($this->items as $item) {
+            if ($item->unit_price === null || $item->not_quoted) {
+                continue;
+            }
             $line = (float) $item->quantity * (float) $item->unit_price;
             $subtotal += $line;
             $tax += $line * (float) $item->tax_rate / 100;

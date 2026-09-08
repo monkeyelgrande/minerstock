@@ -51,12 +51,14 @@ Cada paso es un **documento** con consecutivo, estados y referencia al documento
 - Estados: `borrador → enviada → aprobada | rechazada → en proceso → atendida → cerrada` / `anulada`.
 - Cada ítem lleva acumulados de cantidad ordenada y cantidad despachada a la mina, para saber qué falta.
 
-### 4.2 Cotización (CO)
+### 4.2 Cotización (CO) — flujo de solicitud (RFQ)
 - Quién: comprador.
-- Una por proveedor, con ítems tomados de una o varias solicitudes aprobadas (o libres).
-- Contiene: proveedor, fecha, validez, ítems con unidad, cantidad, precio unitario, IVA, plazo de entrega. Adjunto (foto/PDF de la cotización real).
-- **Comparativa**: mismo producto en columnas por proveedor; se elige el ganador por ítem. Desde ahí se generan las OC.
-- Estados: `borrador → recibida → seleccionada (parcial o total) | descartada`.
+- Una por proveedor. Nace **sin precios**: es el formato que se le envía al proveedor con productos, unidades y cantidades (PDF "Solicitud de cotización" con columnas en blanco).
+- Al enviarla se puede duplicar automáticamente para varios proveedores (una cotización idéntica por cada uno).
+- Cuando el proveedor responde, se **registra la respuesta**: precio, IVA y plazo por ítem, o la marca "no cotizó" para productos que no maneja. Al menos un ítem debe quedar con precio.
+- Si el proveedor nunca responde, la cotización se **descarta**.
+- **Comparativa**: solo considera ítems con precio; mismo producto en columnas por proveedor y ganador por ítem. Desde ahí se generan las OC.
+- Estados: `borrador → enviada → recibida → seleccionada (parcial o total) | descartada`.
 
 ### 4.3 Orden de compra (OC)
 - Quién: la crea el comprador; **siempre la aprueba el aprobador** antes de poder emitirse al proveedor.
@@ -160,7 +162,7 @@ Los saldos por bodega/producto (cantidad y costo promedio) se mantienen en una t
 | **1. Compras** ✅ | Solicitudes con aprobación → cotizaciones + comparativa → OC con aprobación y PDF. | Ciclo de compra completo. |
 | **2. Inventario** ✅ | Recepciones parciales, kardex, saldos valorizados, devoluciones a proveedor, ajustes, conteos. | Stock real y valorizado por bodega. |
 | **3. Cuentas por pagar** ✅ | Facturas ligadas a recepciones, pagos, notas crédito, estado de cuenta por proveedor. | Control de lo que se debe y se ha pagado. |
-| **4. Logística** | Planillas con vehículo y chofer, tránsito, recepción en mina con novedades, PDF de planilla. | Mercancía llega a la mina con control. |
+| **4. Logística** ✅ | Planillas con vehículo y chofer, tránsito, recepción en mina con novedades, PDF de planilla. | Mercancía llega a la mina con control. |
 | **5. Consumo en mina** | Vales de salida, préstamos y devoluciones, alertas de stock mínimo. | Descarga de inventario y control de herramientas. |
 | **6. Visibilidad** | Dashboard, reportes (kardex, valorizado, consumo por centro de costo, compras por proveedor, novedades, préstamos vencidos, cartera), notificaciones. | Gerencia ve el estado global. |
 

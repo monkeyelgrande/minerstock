@@ -1,0 +1,132 @@
+<app-page-header
+  title="En tránsito"
+  subtitle="Mercancía despachada que aún no llega a la bodega destino"
+  [crumbs]="[{ label: 'Logística' }, { label: 'En tránsito' }]"
+>
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Bodega destino"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event)"
+    styleClass="w-52"
+  />
+</app-page-header>
+
+<!-- ================= KPIs ================= -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+  <div class="card p-5 flex items-start justify-between gap-3">
+    <div class="min-w-0">
+      <span class="th-label block truncate">Planillas en camino</span>
+      <span class="text-[28px] leading-9 font-bold tabular mt-1 block text-ink">{{ shipments().length }}</span>
+    </div>
+    <div class="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 bg-[#EFF6FF] text-[#1D4ED8]">
+      <span class="material-symbols-outlined !text-[24px]">local_shipping</span>
+    </div>
+  </div>
+  <div class="card p-5 flex items-start justify-between gap-3">
+    <div class="min-w-0">
+      <span class="th-label block truncate">Valor en tránsito</span>
+      <span class="text-[28px] leading-9 font-bold tabular mt-1 block text-ink">{{ totalValue() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</span>
+    </div>
+    <div class="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 bg-[#ECFDF5] text-[#059669]">
+      <span class="material-symbols-outlined !text-[24px]">payments</span>
+    </div>
+  </div>
+  <div class="card p-5 flex items-start justify-between gap-3" [class.border-[#FED7AA]]="maxDays() > 3">
+    <div class="min-w-0">
+      <span class="th-label block truncate">Días máximos en camino</span>
+      <span class="text-[28px] leading-9 font-bold tabular mt-1 block" [class.text-ink]="maxDays() <= 3" [class.text-[#C2410C]]="maxDays() > 3">{{ maxDays() }}</span>
+    </div>
+    <div
+      class="w-11 h-11 rounded-lg flex items-center justify-center shrink-0"
+      [class.bg-canvas]="maxDays() <= 3"
+      [class.text-ink-3]="maxDays() <= 3"
+      [class.bg-[#FFF7ED]]="maxDays() > 3"
+      [class.text-[#C2410C]]="maxDays() > 3"
+    >
+      <span class="material-symbols-outlined !text-[24px]">schedule</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Planillas ================= -->
+@if (loading()) {
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando mercancía en tránsito…</div>
+} @else if (!shipments().length) {
+  <div class="card card-body text-center py-14">
+    <div class="flex flex-col items-center gap-2 text-ink-3">
+      <span class="material-symbols-outlined !text-[40px]">where_to_vote</span>
+      <span class="text-sm">No hay mercancía en tránsito.</span>
+    </div>
+  </div>
+} @else {
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+    @for (s of shipments(); track s.id) {
+      <div class="card flex flex-col">
+        <div class="card-header">
+          <div class="flex flex-wrap items-center gap-2">
+            <a class="doc-link" [routerLink]="['/logistica/planillas', s.id]">{{ s.number }}</a>
+            <app-chip [tone]="shipmentTone(s.status)" [label]="s.status_label" />
+            @if (s.days_in_transit !== null) {
+              <span
+                class="text-xs tabular"
+                [class.text-ink-3]="s.days_in_transit <= 5"
+                [class.text-[#B91C1C]]="s.days_in_transit > 5"
+                [class.font-semibold]="s.days_in_transit > 5"
+                [pTooltip]="'Despachada ' + (s.dispatched_at | date: 'dd/MM/yyyy HH:mm')"
+              >
+                hace {{ s.days_in_transit }} día(s)
+              </span>
+            }
+          </div>
+          <div class="text-xs text-ink-3">
+            @if (s.vehicle_plate) { <span class="tabular">{{ s.vehicle_plate }}</span> }
+            @if (s.vehicle_plate && s.driver_name) { · }
+            {{ s.driver_name }}
+          </div>
+        </div>
+        <div class="px-5 py-2.5 text-sm text-ink border-b border-line">
+          {{ s.origin.name }}
+          <span class="material-symbols-outlined !text-[14px] align-middle text-ink-3">arrow_forward</span>
+          {{ s.destination.name }}
+        </div>
+        <div class="overflow-x-auto flex-1">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-line bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2">Producto</th>
+                <th class="th-label text-right px-3 py-2 w-32">Pendiente</th>
+                <th class="th-label text-right px-5 py-2 w-32">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of s.items; track $index) {
+                <tr class="border-b border-line last:border-b-0">
+                  <td class="px-5 py-2">
+                    <div class="text-sm text-ink">{{ it.product.name }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product.sku }}</div>
+                  </td>
+                  <td class="px-3 py-2 text-sm text-right tabular text-ink-2">
+                    {{ it.pending_base | number: '1.0-3' }} <span class="text-xs text-ink-3">{{ it.product.base_unit }}</span>
+                  </td>
+                  <td class="px-5 py-2 text-sm text-right tabular text-ink-2">{{ it.value | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="3" class="px-5 py-4 text-center text-sm text-ink-3">Sin ítems pendientes.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-line">
+          <span class="text-sm tabular font-semibold text-ink">Total {{ s.pending_value | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</span>
+          @if (canReceive()) {
+            <p-button label="Registrar recepción" icon="pi pi-download" size="small" severity="secondary" [outlined]="true" (onClick)="goReceive(s)" />
+          }
+        </div>
+      </div>
+    }
+  </div>
+}
