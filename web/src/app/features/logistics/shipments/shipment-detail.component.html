@@ -1,0 +1,271 @@
+@if (shipment(); as s) {
+  <app-page-header
+    [title]="s.number"
+    [subtitle]="subtitle()"
+    [crumbs]="[{ label: 'Logística' }, { label: 'Planillas de viaje', route: '/logistica/planillas' }, { label: s.number }]"
+  >
+    <app-chip chip [tone]="shipmentTone(s.status)" [label]="s.status_label" />
+
+    <p-button label="PDF" icon="pi pi-file-pdf" severity="secondary" [outlined]="true" [loading]="pdfLoading()" (onClick)="openPdf()" />
+    @if (showEdit()) {
+      <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [outlined]="true" (onClick)="goEdit()" />
+    }
+    @if (showClose()) {
+      <p-button label="Cerrar" icon="pi pi-lock" severity="secondary" [outlined]="true" [loading]="acting() === 'close'" [disabled]="!!acting()" (onClick)="close()" />
+    }
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="acting() === 'cancel'" [disabled]="!!acting()" (onClick)="cancel()" />
+    }
+    @if (showDispatch()) {
+      <p-button label="Despachar" icon="pi pi-truck" [loading]="acting() === 'dispatch'" [disabled]="!!acting()" (onClick)="dispatch()" />
+    }
+    @if (showReceive()) {
+      <p-button label="Registrar recepción" icon="pi pi-inbox" [disabled]="!!acting()" (onClick)="goReceive()" />
+    }
+  </app-page-header>
+
+  <!-- ================= Banda de estado ================= -->
+  @if (isCancelled()) {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Planilla anulada</div>
+        <div class="text-ink-2 mt-0.5">
+          @if (s.dispatched_at) {
+            El despacho fue reversado: el stock volvió a la bodega origen.
+          } @else {
+            Esta planilla fue anulada y no tiene efecto sobre el inventario.
+          }
+        </div>
+      </div>
+    </div>
+  } @else {
+    <div class="card mb-4 overflow-x-auto">
+      <ol class="flex items-start min-w-[640px] px-4 py-4">
+        @for (st of steps(); track st.key; let i = $index; let last = $last) {
+          <li class="flex-1 flex flex-col items-center relative">
+            @if (!last) {
+              <div
+                class="absolute top-3.5 left-1/2 w-full h-0.5"
+                [class.bg-emerald-500]="st.state === 'done'"
+                [class.bg-slate-200]="st.state !== 'done'"
+              ></div>
+            }
+            <div
+              class="relative z-10 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ring-4 ring-white"
+              [class.bg-emerald-500]="st.state === 'done'"
+              [class.text-white]="st.state === 'done'"
+              [class.bg-brand]="st.state === 'current'"
+              [class.text-ink]="st.state === 'current'"
+              [class.bg-slate-200]="st.state === 'todo' || st.state === 'skipped'"
+              [class.text-slate-500]="st.state === 'todo' || st.state === 'skipped'"
+              [pTooltip]="st.state === 'skipped' ? 'Paso omitido en el flujo de esta planilla' : undefined"
+              tooltipPosition="top"
+            >
+              @if (st.state === 'done') {
+                <span class="material-symbols-outlined !text-[16px]">check</span>
+              } @else if (st.state === 'skipped') {
+                <span class="material-symbols-outlined !text-[16px]">remove</span>
+              } @else {
+                {{ i + 1 }}
+              }
+            </div>
+            <div
+              class="mt-2 text-xs text-center leading-tight px-1"
+              [class.font-semibold]="st.state === 'current'"
+              [class.text-ink]="st.state === 'done' || st.state === 'current'"
+              [class.text-ink-3]="st.state === 'todo' || st.state === 'skipped'"
+              [class.line-through]="st.state === 'skipped'"
+            >
+              {{ st.label }}
+            </div>
+            @if (st.key === 'despachada' && s.dispatched_at) {
+              <div class="text-[11px] text-ink-3 text-center mt-0.5 px-1">
+                @if (s.dispatcher?.name; as d) { {{ d }} · } {{ s.dispatched_at | date: 'd MMM HH:mm' }}
+              </div>
+            }
+          </li>
+        }
+      </ol>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Ítems</span>
+          <span class="text-xs text-ink-3">{{ items().length }} línea(s)@if (dispatched()) { · recibido {{ s.received_pct ?? 0 }}% }</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[960px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5">Producto</th>
+                <th class="th-label text-left px-3 py-2.5 w-24">Solicitud</th>
+                <th class="th-label text-left px-3 py-2.5 w-20">Unidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Cantidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-28">Equiv. base</th>
+                @if (dispatched()) {
+                  <th class="th-label text-right px-3 py-2.5 w-28">Costo unit.</th>
+                  <th class="th-label text-right px-3 py-2.5 w-32">Valor</th>
+                }
+                <th class="th-label text-left px-3 py-2.5 w-40">Recibido</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Pendiente</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of items(); track it.id) {
+                <tr class="border-b border-line last:border-b-0 align-top">
+                  <td class="px-5 py-3">
+                    <div class="text-sm font-medium text-ink">{{ it.product?.name ?? '—' }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product?.sku }}@if (it.notes) { · <span class="italic">{{ it.notes }}</span> }</div>
+                  </td>
+                  <td class="px-3 py-3">
+                    @if (it.request) {
+                      <a class="doc-link text-sm" [routerLink]="['/compras/solicitudes', it.request.id]">{{ it.request.number ?? '#' + it.request.id }}</a>
+                    } @else {
+                      <span class="text-ink-3 text-xs">Manual</span>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-ink-2 tabular">
+                    {{ it.unit?.code ?? '—' }}
+                    @if (it.factor !== 1) {
+                      <div class="text-[11px] text-ink-3">×{{ fmt(it.factor) }} {{ it.product?.base_unit }}</div>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink">{{ fmt(it.quantity) }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ fmt(it.qty_base) }} <span class="text-xs text-ink-3">{{ it.product?.base_unit }}</span></td>
+                  @if (dispatched()) {
+                    <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ it.unit_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                    <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink">{{ it.line_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  }
+                  <td class="px-3 py-3">
+                    <div class="flex items-center gap-2">
+                      <div class="relative flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div
+                          class="absolute inset-y-0 left-0 rounded-full"
+                          [class.bg-emerald-500]="receivedPct(it) >= 100"
+                          [class.bg-orange-500]="receivedPct(it) < 100"
+                          [style.width.%]="receivedPct(it)"
+                        ></div>
+                      </div>
+                    </div>
+                    <div class="text-[11px] text-ink-3 tabular mt-1">{{ fmt(it.qty_received_base) }} / {{ fmt(it.qty_base) }} {{ it.product?.base_unit }}</div>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular" [class.text-orange-600]="it.pending_base > 0" [class.font-medium]="it.pending_base > 0" [class.text-ink-3]="it.pending_base <= 0">
+                    {{ fmt(it.pending_base) }}
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="9" class="text-center py-8 text-sm text-ink-3">Sin ítems.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between gap-4 px-5 py-4 border-t border-line">
+          @if (dispatched()) {
+            <span class="text-xs text-ink-3">Valores al costo promedio de la bodega origen en el momento del despacho.</span>
+            <dl class="grid grid-cols-[auto_minmax(140px,auto)] gap-x-8 text-sm tabular">
+              <dt class="text-base font-semibold text-ink">Valor total</dt>
+              <dd class="text-right text-base font-semibold text-ink">{{ totalCost() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</dd>
+            </dl>
+          } @else {
+            <span class="text-xs text-ink-3">El valor de la planilla se calcula al despachar, con el costo promedio de la bodega origen.</span>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Recepciones</span>
+          @if (receipts().length) {
+            <span class="text-xs text-ink-3">{{ receipts().length }} {{ receipts().length === 1 ? 'recepción' : 'recepciones' }}</span>
+          }
+        </div>
+        @if (receipts().length) {
+          <ul class="divide-y divide-line">
+            @for (r of receipts(); track r.id) {
+              <li class="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+                <div class="min-w-0">
+                  <a class="doc-link" [routerLink]="['/logistica/recepcion', r.id]">{{ r.number }}</a>
+                  <div class="text-xs text-ink-3 tabular truncate">{{ r.received_at | date: 'dd/MM/yyyy' }}</div>
+                </div>
+                <app-chip [tone]="receiptTone(r.status)" [label]="r.status_label" />
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+            <span class="material-symbols-outlined !text-[20px]">inventory</span>
+            @if (showReceive()) {
+              <span>Aún no se ha registrado ninguna recepción para esta planilla.</span>
+            } @else if (s.can_receive) {
+              <span>Aún no hay recepciones registradas.</span>
+            } @else if (s.status === 'borrador') {
+              <span>Las recepciones se registran una vez despachada la planilla.</span>
+            } @else {
+              <span>Sin recepciones registradas.</span>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">Bodega origen</dt>
+          <dd class="text-ink text-right">{{ s.origin?.name ?? '—' }} @if (s.origin?.code) { <span class="text-xs text-ink-3 tabular">{{ s.origin?.code }}</span> }</dd>
+          <dt class="text-ink-3">Bodega destino</dt>
+          <dd class="text-ink text-right">{{ s.destination?.name ?? '—' }} @if (s.destination?.code) { <span class="text-xs text-ink-3 tabular">{{ s.destination?.code }}</span> }</dd>
+          <dt class="text-ink-3">Vehículo</dt>
+          <dd class="text-ink text-right">
+            @if (s.vehicle; as v) {
+              <span class="tabular">{{ v.plate }}</span>
+              <div class="text-xs text-ink-3">{{ v.type }}@if (v.brand) { {{ v.brand }} }</div>
+            } @else {
+              —
+            }
+          </dd>
+          <dt class="text-ink-3">Chofer</dt>
+          <dd class="text-ink text-right">
+            @if (s.driver; as d) {
+              {{ d.name }}
+              <div class="text-xs text-ink-3 tabular">CC {{ d.document_number }}@if (d.phone) { · {{ d.phone }} }</div>
+            } @else {
+              —
+            }
+          </dd>
+          @if (s.dispatched_at) {
+            <dt class="text-ink-3">Despachada por</dt>
+            <dd class="text-ink text-right">{{ s.dispatcher?.name ?? '—' }}</dd>
+            <dt class="text-ink-3">Fecha de despacho</dt>
+            <dd class="text-ink text-right tabular">{{ s.dispatched_at | date: 'dd/MM/yyyy HH:mm' }}</dd>
+          }
+          <dt class="text-ink-3">Creada por</dt>
+          <dd class="text-ink text-right">{{ s.creator?.name ?? '—' }}</dd>
+          @if (s.notes) {
+            <dt class="text-ink-3 col-span-2 pt-1 border-t border-line">Observaciones</dt>
+            <dd class="text-ink-2 col-span-2 whitespace-pre-line">{{ s.notes }}</dd>
+          }
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body">
+          <app-timeline [events]="timeline()" />
+        </div>
+      </div>
+
+      <app-attachments type="shipment" [documentId]="s.id" [items]="s.attachments ?? []" [canEdit]="canUpdate()" (changed)="load()" />
+    </div>
+  </div>
+} @else {
+  <app-page-header title="Planilla de viaje" [crumbs]="[{ label: 'Logística' }, { label: 'Planillas de viaje', route: '/logistica/planillas' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando planilla…</div>
+}

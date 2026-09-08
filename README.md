@@ -89,7 +89,7 @@ Todas las rutas van bajo `/api`. Salvo `health` y `auth/login`, requieren `Autho
 | GET/PUT | `/admin/settings`, `/admin/document-sequences` | datos de empresa, IVA, consecutivos |
 | GET | `/dashboard` | resumen de indicadores según permisos |
 | CRUD + acciones | `/purchasing/purchase-requests` (`/submit`, `/approve`, `/reject`, `/cancel`, `/close`, `/counts`, `/pending-items`) | solicitudes de compra |
-| CRUD + acciones | `/purchasing/quotations` (`/receive`, `/discard`) | cotizaciones |
+| CRUD + acciones | `/purchasing/quotations` (`/send`, `/respond`, `/pdf`, `/receive`, `/discard`) | solicitudes de cotización (RFQ) y respuestas del proveedor |
 | GET/POST | `/purchasing/comparison`, `/comparison/select`, `/comparison/generate-orders` | comparativa y generación de OC por proveedor |
 | CRUD + acciones | `/purchasing/purchase-orders` (`/submit`, `/approve`, `/reject`, `/reopen`, `/issue`, `/cancel`, `/close`, `/pdf`, `/counts`) | órdenes de compra |
 | GET | `/purchasing/approvals/inbox`, `/approvals/history` | bandeja de aprobaciones |
@@ -103,6 +103,9 @@ Todas las rutas van bajo `/api`. Salvo `health` y `auth/login`, requieren `Autho
 | POST + acciones | `/payables/payments` (`/cancel`, `/methods`) | pagos aplicados a facturas |
 | CRUD + acciones | `/payables/credit-notes` (`/apply`, `/applications/{id}`, `/cancel`) | notas crédito (automáticas por devolución o manuales) |
 | GET | `/payables/statement`, `/payables/statement/{supplierId}` | estado de cuenta por proveedor |
+| CRUD + acciones | `/logistics/shipments` (`/dispatch`, `/cancel`, `/close`, `/pdf`, `/counts`, `/pending-request-items`, `/in-transit`) | planillas de viaje con vehículo y chofer |
+| CRUD + acciones | `/logistics/shipment-receipts` (`/confirm`, `/cancel`) | recepción en mina (exige foto de la planilla firmada) |
+| GET/POST | `/logistics/novelties` (`/counts`, `/{id}/resolve`) | novedades de transporte (faltantes, dañados, sobrantes) |
 
 Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.create`, …) y se verifican con el middleware `permission:`.
 
@@ -114,7 +117,7 @@ Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.cre
 | 1 | Compras: solicitudes con aprobación, cotizaciones, comparativa, OC con PDF | ✅ |
 | 2 | Inventario: recepciones parciales, kardex con costo promedio, stock valorizado, devoluciones, ajustes, conteos | ✅ |
 | 3 | Cuentas por pagar: facturas con retención, pagos, notas crédito, estado de cuenta | ✅ |
-| 4 | Logística: planillas, recepción en mina, novedades | pendiente |
+| 4 | Logística: planillas con despacho al kardex, tránsito, recepción en mina con planilla firmada y novedades | ✅ |
 | 5 | Consumo en mina: vales, préstamos | pendiente |
 | 6 | Dashboards, reportes, notificaciones | pendiente |
 

@@ -49,10 +49,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Logística',
     items: [
-      { label: 'Planillas', icon: 'local_shipping', route: '/logistica/planillas', soon: true },
-      { label: 'Recepción en mina', icon: 'domain', route: '/logistica/recepcion', soon: true },
-      { label: 'Novedades', icon: 'report_problem', route: '/logistica/novedades', soon: true },
-      { label: 'En tránsito', icon: 'route', route: '/logistica/en-transito', soon: true },
+      { label: 'Planillas', icon: 'local_shipping', route: '/logistica/planillas', permission: 'shipments.view' },
+      { label: 'Recepción en mina', icon: 'domain', route: '/logistica/recepcion', permission: 'shipment_receipts.view' },
+      { label: 'Novedades', icon: 'report_problem', route: '/logistica/novedades', permission: 'novelties.view' },
+      { label: 'En tránsito', icon: 'route', route: '/logistica/en-transito', permission: 'shipments.view' },
     ],
   },
   {

@@ -17,6 +17,7 @@ interface DashboardData {
   recent_orders?: { id: number; number: string; supplier: string; date: string; total: number; status: string; status_label: string; received_pct: number }[];
   quotations?: { expiring: number; received: number };
   approvals_pending?: { purchase_requests: number; purchase_orders: number };
+  logistics?: { in_transit_count: number; in_transit_value: number; open_novelties: number; draft_shipments: number };
   payables?: { open_count: number; open_balance: number; overdue_count: number; overdue_balance: number; due_soon_balance: number; available_credit: number };
   stock?: { total_value: number; products_with_stock: number; below_min: number; in_transit_value: number; on_loan_count: number; receipts_draft: number; counts_open: number };
 }
@@ -104,6 +105,18 @@ export class DashboardComponent {
         tone: 'bg-orange-50 text-orange-700',
         note: `${d.quotations.received} recibidas listas para comparar`,
         route: '/compras/comparativa',
+      });
+    }
+    if (d?.logistics) {
+      list.push({
+        label: 'Planillas en tránsito',
+        value: String(d.logistics.in_transit_count),
+        icon: 'route',
+        tone: d.logistics.open_novelties > 0 ? 'bg-orange-50 text-orange-700' : 'bg-cyan-50 text-cyan-700',
+        note: d.logistics.open_novelties > 0
+          ? `${d.logistics.open_novelties} ${d.logistics.open_novelties === 1 ? 'novedad abierta' : 'novedades abiertas'}`
+          : `${new CurrencyPipe('es-CO').transform(d.logistics.in_transit_value, 'COP', 'symbol-narrow', '1.0-0')} en camino`,
+        route: '/logistica/en-transito',
       });
     }
     if (d?.payables) {

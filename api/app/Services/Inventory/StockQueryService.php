@@ -8,6 +8,7 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseProduct;
+use App\Services\Logistics\ShipmentService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -15,6 +16,8 @@ use Illuminate\Support\Collection;
 /** Consultas de stock: saldos por bodega, matriz por producto y kardex. */
 class StockQueryService
 {
+    public function __construct(private readonly ShipmentService $shipments) {}
+
     /** Bodegas visibles por el usuario. */
     public function warehousesFor(User $user): Collection
     {
@@ -55,8 +58,9 @@ class StockQueryService
         $balances = StockBalance::query()->whereIn('warehouse_id', $whIds)
             ->whereIn('product_id', $list->pluck('id'))->get()
             ->groupBy('product_id');
+        $inTransit = $this->shipments->inTransitByProduct($filters['warehouse_id'] ?? null ? (int) $filters['warehouse_id'] : null);
 
-        $rows = $list->map(function (Product $p) use ($warehouses, $balances) {
+        $rows = $list->map(function (Product $p) use ($warehouses, $balances, $inTransit) {
             $byWh = ($balances[$p->id] ?? collect())->keyBy('warehouse_id');
             $settings = $p->warehouseSettings->keyBy('warehouse_id');
             $cells = [];
@@ -82,7 +86,7 @@ class StockQueryService
                 'total_value' => round($totalValue, 2),
                 'avg_cost' => $totalQty > 0 ? round($totalValue / $totalQty, 4) : 0,
                 'below_min' => $anyBelow,
-                'in_transit' => 0.0,   // fase 4
+                'in_transit' => round((float) ($inTransit[$p->id]['qty'] ?? 0), 3),
                 'on_loan' => 0.0,      // fase 5
             ];
         });
@@ -121,11 +125,13 @@ class StockQueryService
             }
         }
 
+        $inTransit = $this->shipments->inTransitByProduct();
+
         return [
             'total_value' => $value,
             'products_with_stock' => $balances->pluck('product_id')->unique()->count(),
             'below_min' => $belowMin,
-            'in_transit_value' => 0.0,
+            'in_transit_value' => round((float) array_sum(array_column($inTransit, 'value')), 2),
             'on_loan_count' => 0,
         ];
     }

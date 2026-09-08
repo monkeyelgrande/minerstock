@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'quotation_id', 'product_id', 'purchase_request_item_id', 'unit_id', 'factor', 'quantity', 'qty_base',
-    'unit_price', 'tax_rate', 'line_total', 'delivery_days', 'notes', 'is_selected', 'purchase_order_item_id', 'sort_order',
+    'unit_price', 'tax_rate', 'line_total', 'delivery_days', 'notes', 'is_selected', 'not_quoted', 'purchase_order_item_id', 'sort_order',
 ])]
 class QuotationItem extends Model
 {
@@ -23,6 +23,7 @@ class QuotationItem extends Model
             'line_total' => 'decimal:2',
             'delivery_days' => 'integer',
             'is_selected' => 'boolean',
+            'not_quoted' => 'boolean',
         ];
     }
 
@@ -52,8 +53,11 @@ class QuotationItem extends Model
     }
 
     /** Precio por unidad base (para comparar cotizaciones en distintas unidades). */
-    public function basePrice(): float
+    public function basePrice(): ?float
     {
+        if ($this->unit_price === null || $this->not_quoted) {
+            return null;
+        }
         $factor = (float) $this->factor ?: 1.0;
 
         return round((float) $this->unit_price / $factor, 4);

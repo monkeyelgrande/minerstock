@@ -1,0 +1,212 @@
+@if (receipt(); as r) {
+  <app-page-header
+    [title]="r.number"
+    [subtitle]="subtitle()"
+    [crumbs]="[{ label: 'Logística' }, { label: 'Recepción en mina', route: '/logistica/recepcion' }, { label: r.number }]"
+  >
+    <app-chip chip [tone]="docTone(r.status)" [label]="r.status_label" />
+
+    @if (showEdit()) {
+      <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [outlined]="true" [disabled]="!!acting()" (onClick)="goEdit()" />
+    }
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="acting() === 'cancel'" [disabled]="!!acting()" (onClick)="cancelReceipt()" />
+    }
+    @if (showConfirm()) {
+      <span [pTooltip]="hasSignedSheet() ? '' : 'Adjunta la foto de la planilla firmada por el chofer para poder confirmar.'" tooltipPosition="bottom">
+        <p-button label="Confirmar" icon="pi pi-check-circle" [loading]="acting() === 'confirm'" [disabled]="!!acting() || !hasSignedSheet()" (onClick)="confirmReceipt()" />
+      </span>
+    }
+  </app-page-header>
+
+  <!-- ================= Banda de estado ================= -->
+  @if (r.status === 'anulado') {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Recepción anulada</div>
+        <div class="text-ink-2 mt-0.5">Esta recepción no tiene efecto sobre el stock ni sobre la planilla de viaje.</div>
+      </div>
+    </div>
+  } @else if (r.status === 'borrador' && !hasSignedSheet()) {
+    <div class="flex items-start gap-3 rounded-card border border-[#FED7AA] bg-[#FFF7ED] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#C2410C] !text-[20px]">warning</span>
+      <div>
+        <div class="font-semibold text-[#C2410C]">Falta la planilla firmada</div>
+        <div class="text-ink-2 mt-0.5">Adjunta la foto de la planilla firmada por el chofer en la tarjeta de la derecha para poder confirmar la recepción.</div>
+      </div>
+    </div>
+  } @else if (r.status === 'borrador') {
+    <div class="flex items-start gap-3 rounded-card border border-[#CBD5E1] bg-[#F1F5F9] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#475569] !text-[20px]">pending</span>
+      <div>
+        <div class="font-semibold text-ink">Borrador</div>
+        <div class="text-ink-2 mt-0.5">La mercancía aún no ingresa al stock. Confirma la recepción para registrar el ingreso y las novedades.</div>
+      </div>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Ítems verificados</span>
+          <span class="text-xs text-ink-3">{{ items().length }} línea(s)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[860px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5 min-w-[200px]">Producto</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Enviado</th>
+                <th class="th-label text-right px-3 py-2.5 w-28">Recibido bien</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Dañado</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Sobrante</th>
+                <th class="th-label text-right px-3 py-2.5 w-24">Faltante</th>
+                <th class="th-label text-left px-3 py-2.5 min-w-[150px]">Observación</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of items(); track it.id) {
+                <tr class="border-b border-line last:border-b-0 align-top" [class.bg-red-50]="it.has_novelty">
+                  <td class="px-5 py-3">
+                    <div class="text-sm font-medium text-ink">{{ it.product?.name ?? '—' }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product?.sku }} · base {{ it.product?.base_unit ?? '—' }}</div>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">{{ it.shipment_item?.qty_base | number: '1.0-3' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium text-[#059669]">{{ it.qty_received_base | number: '1.0-3' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular" [class.text-[#C2410C]]="it.qty_damaged_base > 0" [class.font-medium]="it.qty_damaged_base > 0" [class.text-ink-3]="!it.qty_damaged_base">
+                    {{ it.qty_damaged_base | number: '1.0-3' }}
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular" [class.text-[#1D4ED8]]="it.qty_extra_base > 0" [class.font-medium]="it.qty_extra_base > 0" [class.text-ink-3]="!it.qty_extra_base">
+                    {{ it.qty_extra_base | number: '1.0-3' }}
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular" [class.text-[#B91C1C]]="it.qty_missing_base > 0" [class.font-semibold]="it.qty_missing_base > 0" [class.text-ink-3]="!it.qty_missing_base">
+                    {{ it.qty_missing_base | number: '1.0-3' }}
+                  </td>
+                  <td class="px-3 py-3 text-sm text-ink-2">
+                    @if (it.notes) { <span class="italic">{{ it.notes }}</span> } @else { <span class="text-ink-3">—</span> }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="7" class="text-center py-8 text-sm text-ink-3">Sin ítems.</td></tr>
+              }
+            </tbody>
+            @if (items().length) {
+              <tfoot>
+                <tr class="border-t border-[#CBD5E1] bg-[#F8FAFC]">
+                  <td class="px-5 py-2.5 text-sm font-semibold text-ink">Totales (unidad base)</td>
+                  <td class="px-3 py-2.5 text-sm text-right tabular text-ink-2">{{ totals().sent | number: '1.0-3' }}</td>
+                  <td class="px-3 py-2.5 text-sm text-right tabular font-semibold text-[#059669]">{{ totals().received | number: '1.0-3' }}</td>
+                  <td class="px-3 py-2.5 text-sm text-right tabular font-semibold" [class.text-[#C2410C]]="totals().damaged > 0" [class.text-ink-3]="!totals().damaged">{{ totals().damaged | number: '1.0-3' }}</td>
+                  <td class="px-3 py-2.5 text-sm text-right tabular font-semibold" [class.text-[#1D4ED8]]="totals().extra > 0" [class.text-ink-3]="!totals().extra">{{ totals().extra | number: '1.0-3' }}</td>
+                  <td class="px-3 py-2.5 text-sm text-right tabular font-semibold" [class.text-[#B91C1C]]="totals().missing > 0" [class.text-ink-3]="!totals().missing">{{ totals().missing | number: '1.0-3' }}</td>
+                  <td class="px-3 py-2.5"></td>
+                </tr>
+              </tfoot>
+            }
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Novedades</span>
+          @if (novelties().length) {
+            <a class="text-xs text-link hover:underline" routerLink="/logistica/novedades">Ver todas en Novedades</a>
+          }
+        </div>
+        @if (novelties().length) {
+          <ul class="divide-y divide-line">
+            @for (n of novelties(); track n.id) {
+              <li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 text-sm">
+                <app-chip [tone]="noveltyTone(n.type)" [label]="n.type_label" />
+                <span class="tabular font-medium text-ink">{{ n.qty_base | number: '1.0-3' }} <span class="text-xs text-ink-3">unid. base</span></span>
+                <span class="text-ink-2">{{ n.description || 'Sin descripción' }}</span>
+                <span class="flex-1"></span>
+                <app-chip [tone]="n.status === 'resuelta' ? 'success' : 'partial'" [label]="n.status === 'resuelta' ? 'Resuelta' : 'Abierta'" />
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="card-body text-sm text-ink-3 flex items-center gap-2">
+            <span class="material-symbols-outlined !text-[20px]">verified</span>
+            @if (r.status === 'confirmado') {
+              Sin novedades: todo llegó completo y en buen estado.
+            } @else {
+              Las novedades (faltantes, dañados, sobrantes) se registran al confirmar la recepción.
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">Planilla</dt>
+          <dd class="text-right">
+            @if (r.shipment) {
+              <a class="doc-link" [routerLink]="['/logistica/planillas', r.shipment.id]">{{ r.shipment.number }}</a>
+              <div class="text-xs text-ink-3">{{ r.shipment.status_label }}</div>
+            } @else {
+              <span class="text-ink-3">—</span>
+            }
+          </dd>
+          <dt class="text-ink-3">Origen</dt>
+          <dd class="text-ink text-right">{{ r.shipment?.origin?.name ?? '—' }}</dd>
+          <dt class="text-ink-3">Destino</dt>
+          <dd class="text-ink text-right">{{ r.shipment?.destination?.name ?? '—' }}</dd>
+          <dt class="text-ink-3">Vehículo</dt>
+          <dd class="text-ink text-right tabular">{{ r.shipment?.vehicle?.plate ?? '—' }}</dd>
+          <dt class="text-ink-3">Chofer</dt>
+          <dd class="text-ink text-right">{{ r.shipment?.driver?.name ?? '—' }}</dd>
+          <dt class="text-ink-3">Despachada el</dt>
+          <dd class="text-ink text-right tabular">{{ r.shipment?.dispatched_at ? (r.shipment?.dispatched_at | date: 'dd/MM/yyyy HH:mm') : '—' }}</dd>
+          <dt class="text-ink-3">Fecha de recepción</dt>
+          <dd class="text-ink text-right tabular">{{ r.received_at | date: 'dd/MM/yyyy' }}</dd>
+          <dt class="text-ink-3">Recibido por</dt>
+          <dd class="text-ink text-right">{{ r.receiver?.name ?? '—' }}</dd>
+          <dt class="text-ink-3">Elaborado por</dt>
+          <dd class="text-ink text-right">{{ r.creator?.name ?? '—' }}</dd>
+          @if (r.notes) {
+            <dt class="text-ink-3 col-span-2 pt-1 border-t border-line">Observaciones</dt>
+            <dd class="text-ink-2 col-span-2 whitespace-pre-line">{{ r.notes }}</dd>
+          }
+        </dl>
+      </div>
+
+      <div class="space-y-2">
+        <app-attachments
+          type="shipment_receipt"
+          [documentId]="r.id"
+          [items]="r.attachments ?? []"
+          [canEdit]="r.is_editable && canUpdate()"
+          purpose="planilla_firmada"
+          title="Planilla firmada"
+          hint="Sube la foto de la planilla firmada por el chofer"
+          (changed)="load()"
+        />
+        @if (hasSignedSheet()) {
+          <div class="flex items-center gap-2 text-sm text-[#059669] px-1">
+            <span class="material-symbols-outlined !text-[20px]">check_circle</span>
+            Planilla firmada adjunta.
+          </div>
+        }
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body">
+          <app-timeline [events]="timeline()" />
+        </div>
+      </div>
+    </div>
+  </div>
+} @else {
+  <app-page-header title="Recepción en mina" [crumbs]="[{ label: 'Logística' }, { label: 'Recepción en mina', route: '/logistica/recepcion' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando recepción…</div>
+}

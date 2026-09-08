@@ -7,6 +7,8 @@ use App\Models\GoodsReceipt;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\Quotation;
+use App\Models\Shipment;
+use App\Models\ShipmentNovelty;
 use App\Models\StockCount;
 use App\Models\SupplierCreditNote;
 use App\Models\SupplierInvoice;
@@ -73,6 +75,21 @@ class DashboardController extends Controller
             $data['approvals_pending'] = [
                 'purchase_requests' => PurchaseRequest::query()->where('status', 'enviada')->count(),
                 'purchase_orders' => PurchaseOrder::query()->where('status', 'pendiente_aprobacion')->count(),
+            ];
+        }
+
+        if ($user->can('shipments.view')) {
+            $inTransit = Shipment::query()->visibleTo($user)->whereIn('status', ['despachada', 'recibida_parcial'])
+                ->with('items')->get();
+            $data['logistics'] = [
+                'in_transit_count' => $inTransit->count(),
+                'in_transit_value' => round((float) $inTransit->sum(fn ($s) => $s->items->sum(fn ($i) => $i->pendingBase() * (float) $i->unit_cost)), 2),
+                'open_novelties' => $user->can('novelties.view')
+                    ? ShipmentNovelty::query()->where('status', 'abierta')
+                        ->whereHas('receiptItem.receipt', fn ($q) => $q->where('status', 'confirmado')->whereHas('shipment', fn ($s) => $s->visibleTo($user)))
+                        ->count()
+                    : 0,
+                'draft_shipments' => Shipment::query()->visibleTo($user)->where('status', 'borrador')->count(),
             ];
         }
 

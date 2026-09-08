@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api\Purchasing;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Purchasing\QuotationResource;
 use App\Models\Quotation;
+use App\Models\Setting;
 use App\Services\Purchasing\QuotationService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\ResourceCollection;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\Response;
 
 class QuotationController extends Controller
 {
@@ -75,6 +78,62 @@ class QuotationController extends Controller
         return response()->json(null, 204);
     }
 
+    /** Envía la solicitud al proveedor y opcionalmente la duplica para otros proveedores. */
+    public function send(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'additional_supplier_ids' => ['nullable', 'array'],
+            'additional_supplier_ids.*' => ['integer', Rule::exists('suppliers', 'id')],
+        ]);
+        $sent = $this->service->send(
+            Quotation::query()->findOrFail($id),
+            $data['additional_supplier_ids'] ?? [],
+            $request->user(),
+        );
+
+        return response()->json([
+            'message' => $sent->count() === 1
+                ? 'Solicitud de cotización enviada.'
+                : "Solicitud enviada a {$sent->count()} proveedores.",
+            'data' => QuotationResource::collection($sent->each->load(self::DETAIL)),
+        ]);
+    }
+
+    /** Registra la respuesta del proveedor (precios por ítem o "no cotizó"). */
+    public function respond(Request $request, int $id): QuotationResource
+    {
+        $data = $request->validate([
+            'valid_until' => ['nullable', 'date'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.id' => ['required', 'integer'],
+            'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'items.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.delivery_days' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'items.*.not_quoted' => ['sometimes', 'boolean'],
+        ]);
+        $q = $this->service->registerResponse(
+            Quotation::query()->findOrFail($id),
+            $data['items'],
+            $data['valid_until'] ?? null,
+            $request->user(),
+        );
+
+        return new QuotationResource($q->fresh(self::DETAIL));
+    }
+
+    /** PDF "Solicitud de cotización" para enviar al proveedor. */
+    public function pdf(int $id): Response
+    {
+        $q = Quotation::query()->with(['supplier', 'creator', 'items.product.baseUnit', 'items.unit'])->findOrFail($id);
+
+        $pdf = Pdf::loadView('pdf.quotation-request', [
+            'quotation' => $q,
+            'company' => Setting::get('company', ['name' => config('app.name')]),
+        ])->setPaper('letter');
+
+        return $pdf->stream("{$q->number}.pdf");
+    }
+
     public function receive(int $id): QuotationResource
     {
         $q = $this->service->markReceived(Quotation::query()->findOrFail($id));
@@ -102,7 +161,8 @@ class QuotationController extends Controller
             'items.*.purchase_request_item_id' => ['nullable', 'integer', Rule::exists('purchase_request_items', 'id')],
             'items.*.unit_id' => ['required', 'integer', Rule::exists('units', 'id')],
             'items.*.quantity' => ['required', 'numeric', 'gt:0'],
-            'items.*.unit_price' => ['required', 'numeric', 'min:0'],
+            'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'items.*.not_quoted' => ['sometimes', 'boolean'],
             'items.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'items.*.delivery_days' => ['nullable', 'integer', 'min:0', 'max:365'],
             'items.*.notes' => ['nullable', 'string', 'max:255'],

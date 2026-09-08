@@ -25,6 +25,8 @@ class ComparisonService
         $query = QuotationItem::query()
             ->with(['quotation.supplier', 'product.baseUnit', 'unit', 'requestItem.request'])
             ->whereNull('purchase_order_item_id')
+            ->whereNotNull('unit_price')
+            ->where('not_quoted', false)
             ->whereHas('quotation', fn (Builder $q) => $q->whereIn('status', [QuotationStatus::Recibida->value, QuotationStatus::Seleccionada->value]));
 
         if (! empty($filters['request_ids'])) {

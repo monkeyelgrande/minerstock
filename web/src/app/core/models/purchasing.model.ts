@@ -2,7 +2,7 @@
 
 export type PurchaseRequestStatus =
   | 'borrador' | 'enviada' | 'aprobada' | 'rechazada' | 'en_proceso' | 'atendida' | 'cerrada' | 'anulada';
-export type QuotationStatus = 'borrador' | 'recibida' | 'seleccionada' | 'descartada';
+export type QuotationStatus = 'borrador' | 'enviada' | 'recibida' | 'seleccionada' | 'descartada';
 export type PurchaseOrderStatus =
   | 'borrador' | 'pendiente_aprobacion' | 'aprobada' | 'rechazada' | 'emitida' | 'recibida_parcial' | 'recibida' | 'cerrada' | 'anulada';
 export type Priority = 'baja' | 'normal' | 'alta' | 'urgente';
@@ -45,7 +45,9 @@ export type AttachableType =
   | 'adjustment'
   | 'supplier_invoice'
   | 'supplier_payment'
-  | 'supplier_credit_note';
+  | 'supplier_credit_note'
+  | 'shipment'
+  | 'shipment_receipt';
 
 // ---------- Solicitudes de compra ----------
 export interface PurchaseRequestItem {
@@ -126,13 +128,14 @@ export interface QuotationItem {
   factor: number;
   quantity: number;
   qty_base: number;
-  unit_price: number;
-  base_price: number;
+  unit_price: number | null;
+  base_price: number | null;
   tax_rate: number;
   line_total: number;
   delivery_days: number | null;
   notes: string | null;
   is_selected: boolean;
+  not_quoted: boolean;
   purchase_order_item_id: number | null;
 }
 
@@ -147,6 +150,8 @@ export interface Quotation {
   status: QuotationStatus;
   status_label: string;
   is_editable: boolean;
+  can_respond: boolean;
+  sent_at: string | null;
   subtotal: number;
   tax: number;
   total: number;
@@ -170,10 +175,23 @@ export interface QuotationPayload {
     purchase_request_item_id?: number | null;
     unit_id: number;
     quantity: number;
-    unit_price: number;
+    unit_price?: number | null;
     tax_rate?: number;
     delivery_days?: number | null;
+    not_quoted?: boolean;
     notes?: string | null;
+  }[];
+}
+
+/** Respuesta del proveedor a una solicitud de cotización. */
+export interface QuotationResponsePayload {
+  valid_until?: string | null;
+  items: {
+    id: number;
+    unit_price?: number | null;
+    tax_rate?: number;
+    delivery_days?: number | null;
+    not_quoted?: boolean;
   }[];
 }
 
