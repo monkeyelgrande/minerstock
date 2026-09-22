@@ -47,7 +47,9 @@ export type AttachableType =
   | 'supplier_payment'
   | 'supplier_credit_note'
   | 'shipment'
-  | 'shipment_receipt';
+  | 'shipment_receipt'
+  | 'issue'
+  | 'loan';
 
 // ---------- Solicitudes de compra ----------
 export interface PurchaseRequestItem {

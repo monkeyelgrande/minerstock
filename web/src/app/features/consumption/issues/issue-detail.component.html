@@ -1,0 +1,158 @@
+@if (issue(); as v) {
+  <app-page-header
+    [title]="v.number"
+    [subtitle]="(v.recipient?.name ?? '—') + ' · ' + (v.warehouse?.name ?? '—')"
+    [crumbs]="[{ label: 'Bodega' }, { label: 'Vales de salida', route: '/bodega/vales' }, { label: v.number }]"
+  >
+    <app-chip chip [tone]="statusTone(v.status)" [label]="v.status_label" />
+
+    @if (showEdit()) {
+      <p-button label="Editar" icon="pi pi-pencil" severity="secondary" [outlined]="true" (onClick)="goEdit()" />
+    }
+    @if (showCancel()) {
+      <p-button label="Anular" icon="pi pi-ban" severity="danger" [outlined]="true" [loading]="acting() === 'cancel'" [disabled]="!!acting()" (onClick)="cancelIssue()" />
+    }
+    <p-button label="PDF" icon="pi pi-file-pdf" severity="secondary" [outlined]="true" [loading]="pdfLoading()" (onClick)="downloadPdf()" />
+    @if (showConfirm()) {
+      <p-button label="Confirmar" icon="pi pi-check" [loading]="acting() === 'confirm'" [disabled]="!!acting()" (onClick)="confirmIssue()" />
+    }
+  </app-page-header>
+
+  <!-- ================= Bandas de estado ================= -->
+  @if (v.status === 'anulado') {
+    <div class="flex items-start gap-3 rounded-card border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#B91C1C] !text-[20px]">block</span>
+      <div>
+        <div class="font-semibold text-[#B91C1C]">Vale anulado</div>
+        <div class="text-ink-2 mt-0.5">{{ v.confirmed_at ? 'Las salidas aplicadas al stock fueron reversadas en el kardex.' : 'Este vale no tuvo efecto sobre el inventario.' }}</div>
+      </div>
+    </div>
+  } @else if (v.status === 'borrador') {
+    <div class="flex items-start gap-3 rounded-card border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 mb-4 text-sm">
+      <span class="material-symbols-outlined text-[#1D4ED8] !text-[20px]">info</span>
+      <div class="text-ink-2">El vale está en borrador y aún no descuenta stock. Confírmalo para registrar la salida al costo promedio de la bodega.</div>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+    <!-- ================= Columna principal ================= -->
+    <div class="xl:col-span-2 space-y-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Ítems</span>
+          <span class="text-xs text-ink-3">{{ items().length }} línea(s)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[820px]">
+            <thead>
+              <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2.5">Producto</th>
+                <th class="th-label text-left px-3 py-2.5 w-24">Unidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-28">Cantidad</th>
+                <th class="th-label text-right px-3 py-2.5 w-28">Equiv. base</th>
+                <th class="th-label text-right px-3 py-2.5 w-32">Costo unit.</th>
+                <th class="th-label text-right px-3 py-2.5 w-36">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of items(); track it.id) {
+                <tr class="border-b border-line last:border-b-0 align-top">
+                  <td class="px-5 py-3">
+                    <div class="text-sm font-medium text-ink">{{ it.product?.name ?? '—' }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product?.sku }}</div>
+                    @if (it.notes) {
+                      <div class="text-xs text-ink-2 mt-0.5">{{ it.notes }}</div>
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-ink-2">{{ it.unit?.code ?? '—' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink">{{ it.quantity | number: '1.0-3' }}</td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">
+                    {{ it.qty_base | number: '1.0-3' }} <span class="text-xs text-ink-3">{{ it.product?.base_unit }}</span>
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular text-ink-2">
+                    @if (isDraft()) {
+                      <span class="text-ink-3" pTooltip="Se toma el costo promedio al confirmar" tooltipPosition="top">—</span>
+                    } @else {
+                      {{ it.unit_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+                    }
+                  </td>
+                  <td class="px-3 py-3 text-sm text-right tabular font-medium text-ink">
+                    @if (isDraft()) {
+                      <span class="text-ink-3 font-normal">—</span>
+                    } @else {
+                      {{ it.line_cost | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="6" class="text-center py-8 text-sm text-ink-3">Sin ítems.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="flex justify-end px-5 py-4 border-t border-line">
+          <dl class="grid grid-cols-[auto_minmax(140px,auto)] gap-x-8 gap-y-1 text-sm tabular min-w-[260px]">
+            <dt class="text-base font-semibold text-ink">Total</dt>
+            <dd class="text-right text-base font-semibold">
+              @if (isDraft()) {
+                <span class="text-ink-3 font-normal text-sm" pTooltip="Se valora al costo promedio al confirmar" tooltipPosition="top">—</span>
+              } @else {
+                <span class="text-ink">{{ total() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</span>
+              }
+            </dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Columna lateral ================= -->
+    <div class="space-y-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Datos</span></div>
+        <dl class="card-body grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="text-ink-3">Bodega</dt>
+          <dd class="text-ink text-right">{{ v.warehouse?.name ?? '—' }} @if (v.warehouse?.code) { <span class="text-xs text-ink-3 tabular">{{ v.warehouse?.code }}</span> }</dd>
+          <dt class="text-ink-3">Receptor</dt>
+          <dd class="text-ink text-right">
+            {{ v.recipient?.name ?? '—' }}
+            @if (v.recipient?.document_number) {
+              <div class="text-xs text-ink-3 tabular">{{ v.recipient?.document_number }}</div>
+            }
+          </dd>
+          <dt class="text-ink-3">Centro de costo</dt>
+          <dd class="text-ink text-right">
+            @if (v.cost_center; as cc) {
+              {{ cc.name }} <span class="text-xs text-ink-3 tabular">{{ cc.code }}</span>
+            } @else {
+              <span class="text-ink-3">—</span>
+            }
+          </dd>
+          <dt class="text-ink-3">Fecha</dt>
+          <dd class="text-ink text-right tabular">{{ v.date | date: 'dd/MM/yyyy' }}</dd>
+          @if (v.confirmed_at) {
+            <dt class="text-ink-3">Entregado</dt>
+            <dd class="text-ink text-right tabular">{{ v.confirmed_at | date: 'd MMM y, HH:mm' }}</dd>
+          }
+          <dt class="text-ink-3">Creado por</dt>
+          <dd class="text-ink text-right">{{ v.creator?.name ?? '—' }}</dd>
+          @if (v.notes) {
+            <dt class="text-ink-3 col-span-2 pt-1 border-t border-line">Observaciones</dt>
+            <dd class="text-ink-2 col-span-2 whitespace-pre-line">{{ v.notes }}</dd>
+          }
+        </dl>
+      </div>
+
+      <app-attachments [type]="attachType" [documentId]="v.id" [items]="v.attachments ?? []" [canEdit]="canUpdate()" (changed)="load()" />
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Línea de tiempo</span></div>
+        <div class="card-body">
+          <app-timeline [events]="timeline()" />
+        </div>
+      </div>
+    </div>
+  </div>
+} @else {
+  <app-page-header title="Vale de salida" [crumbs]="[{ label: 'Bodega' }, { label: 'Vales de salida', route: '/bodega/vales' }, { label: '…' }]" />
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando vale…</div>
+}

@@ -38,6 +38,11 @@ export const routes: Routes = [
         loadChildren: () => import('./features/logistics/logistics.routes').then((m) => m.LOGISTICS_ROUTES),
       },
       {
+        path: 'bodega',
+        canActivateChild: [permissionGuard],
+        loadChildren: () => import('./features/consumption/consumption.routes').then((m) => m.CONSUMPTION_ROUTES),
+      },
+      {
         path: 'pagos',
         canActivateChild: [permissionGuard],
         loadChildren: () => import('./features/payables/payables.routes').then((m) => m.PAYABLES_ROUTES),

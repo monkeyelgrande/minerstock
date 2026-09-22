@@ -1,0 +1,182 @@
+<app-page-header
+  title="Préstamos de herramientas"
+  subtitle="Herramientas retornables entregadas a personas o áreas"
+  [crumbs]="[{ label: 'Bodega' }, { label: 'Préstamos' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Nuevo préstamo" icon="pi pi-plus" (onClick)="goCreate()" />
+  }
+</app-page-header>
+
+<!-- ================= Pestañas por estado ================= -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="flex items-center gap-2 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+      <span
+        class="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-semibold tabular"
+        [class.bg-red-100]="t.overdue"
+        [class.text-red-700]="t.overdue"
+        [class.bg-amber-100]="!t.overdue && tab() === t.key"
+        [class.text-amber-800]="!t.overdue && tab() === t.key"
+        [class.bg-slate-100]="!t.overdue && tab() !== t.key"
+        [class.text-slate-600]="!t.overdue && tab() !== t.key"
+      >{{ countFor(t) }}</span>
+    </button>
+  }
+</div>
+
+<app-crud-toolbar
+  [(search)]="search"
+  searchPlaceholder="Buscar por número, receptor o herramienta…"
+  [showActiveFilter]="false"
+  [createLabel]="null"
+>
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Bodega"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event)"
+    styleClass="w-48"
+  />
+  <p-select
+    [options]="recipients()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Receptor"
+    [filter]="true"
+    [showClear]="true"
+    [ngModel]="recipientId()"
+    (ngModelChange)="setRecipient($event)"
+    styleClass="w-56"
+  >
+    <ng-template #item let-r>
+      {{ r.name }}
+      @if (r.document_number) {
+        <span class="text-xs text-ink-3 tabular ml-1">{{ r.document_number }}</span>
+      }
+    </ng-template>
+  </p-select>
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="created_at"
+    [sortOrder]="-1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="number" class="w-32">Número <p-sortIcon field="number" /></th>
+        <th>Receptor</th>
+        <th>Bodega</th>
+        <th pSortableColumn="loaned_at" class="w-32">Prestado <p-sortIcon field="loaned_at" /></th>
+        <th pSortableColumn="expected_return_at" class="w-44">Devolución esperada <p-sortIcon field="expected_return_at" /></th>
+        <th class="w-16 text-right">Ítems</th>
+        <th class="w-44">Estado</th>
+        <th class="w-36 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/bodega/prestamos', row.id]">{{ row.number }}</a>
+        </td>
+        <td>
+          <div class="text-sm font-medium text-ink">{{ row.recipient?.name ?? '—' }}</div>
+          @if (row.recipient?.document_number) {
+            <div class="text-xs text-ink-3 tabular">{{ row.recipient?.document_number }}</div>
+          }
+        </td>
+        <td class="text-ink-2">{{ row.warehouse?.name ?? '—' }}</td>
+        <td class="tabular text-ink-2">{{ row.loaned_at | date: 'dd/MM/yyyy' }}</td>
+        <td>
+          @if (row.expected_return_at) {
+            <span
+              class="tabular inline-flex items-center gap-1"
+              [class.text-red-600]="row.is_overdue"
+              [class.font-medium]="row.is_overdue"
+              [class.text-ink-2]="!row.is_overdue"
+            >
+              @if (row.is_overdue) {
+                <span class="material-symbols-outlined !text-[16px]">warning</span>
+              }
+              {{ row.expected_return_at | date: 'dd/MM/yyyy' }}
+            </span>
+          } @else {
+            <span class="text-ink-3 text-xs">Sin fecha</span>
+          }
+        </td>
+        <td class="tabular text-right text-ink-2">{{ row.items_count ?? '—' }}</td>
+        <td>
+          <div class="flex items-center gap-1.5">
+            <app-chip [tone]="loanTone(row.status)" [label]="row.status_label" />
+            @if (row.is_overdue && (row.status === 'abierto' || row.status === 'parcial')) {
+              <span class="chip chip-danger !h-5 !px-1.5 text-[11px]">Vencido</span>
+            }
+          </div>
+        </td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver detalle" (onClick)="goDetail(row)" />
+          @if (row.status === 'borrador' && canUpdate()) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="goEdit(row)" />
+          }
+          @if (row.can_return && canUpdate()) {
+            <p-button icon="pi pi-replay" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Registrar devolución" (onClick)="goReturn(row)" />
+          }
+          <p-button
+            icon="pi pi-file-pdf"
+            [text]="true"
+            [rounded]="true"
+            severity="secondary"
+            size="small"
+            pTooltip="Ver PDF"
+            [loading]="downloading() === row.id"
+            (onClick)="openPdf(row)"
+          />
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="8" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">handyman</span>
+            @if (tab() === 'vencidos') {
+              <span class="text-sm">No hay préstamos vencidos. Todo está al día.</span>
+            } @else {
+              <span class="text-sm">No hay préstamos que coincidan con los filtros.</span>
+            }
+            @if (canCreate() && tab() === 'all' && !search()) {
+              <p-button label="Crear el primer préstamo" icon="pi pi-plus" [text]="true" size="small" (onClick)="goCreate()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

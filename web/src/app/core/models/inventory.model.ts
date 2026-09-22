@@ -261,6 +261,7 @@ export interface StockTotals {
   products_with_stock: number;
   below_min: number;
   in_transit_value: number;
+  on_loan_value?: number;
   on_loan_count: number;
 }
 

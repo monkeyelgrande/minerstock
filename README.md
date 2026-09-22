@@ -106,6 +106,8 @@ Todas las rutas van bajo `/api`. Salvo `health` y `auth/login`, requieren `Autho
 | CRUD + acciones | `/logistics/shipments` (`/dispatch`, `/cancel`, `/close`, `/pdf`, `/counts`, `/pending-request-items`, `/in-transit`) | planillas de viaje con vehículo y chofer |
 | CRUD + acciones | `/logistics/shipment-receipts` (`/confirm`, `/cancel`) | recepción en mina (exige foto de la planilla firmada) |
 | GET/POST | `/logistics/novelties` (`/counts`, `/{id}/resolve`) | novedades de transporte (faltantes, dañados, sobrantes) |
+| CRUD + acciones | `/consumption/issues` (`/confirm`, `/cancel`, `/pdf`, `/counts`) | vales de salida a receptores con centro de costo |
+| CRUD + acciones | `/consumption/loans` (`/confirm`, `/cancel`, `/returns`, `/holdings`, `/pdf`, `/counts`) | préstamos de herramientas retornables y devoluciones (bueno/dañado/perdido) |
 
 Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.create`, …) y se verifican con el middleware `permission:`.
 
@@ -118,7 +120,7 @@ Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.cre
 | 2 | Inventario: recepciones parciales, kardex con costo promedio, stock valorizado, devoluciones, ajustes, conteos | ✅ |
 | 3 | Cuentas por pagar: facturas con retención, pagos, notas crédito, estado de cuenta | ✅ |
 | 4 | Logística: planillas con despacho al kardex, tránsito, recepción en mina con planilla firmada y novedades | ✅ |
-| 5 | Consumo en mina: vales, préstamos | pendiente |
+| 5 | Consumo en mina: vales de salida con PDF, préstamos de herramientas con devoluciones y herramientas por persona | ✅ |
 | 6 | Dashboards, reportes, notificaciones | pendiente |
 
 ## Deploy a producción

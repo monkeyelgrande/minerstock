@@ -8,6 +8,7 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseProduct;
+use App\Services\Consumption\LoanService;
 use App\Services\Logistics\ShipmentService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,7 +17,10 @@ use Illuminate\Support\Collection;
 /** Consultas de stock: saldos por bodega, matriz por producto y kardex. */
 class StockQueryService
 {
-    public function __construct(private readonly ShipmentService $shipments) {}
+    public function __construct(
+        private readonly ShipmentService $shipments,
+        private readonly LoanService $loans,
+    ) {}
 
     /** Bodegas visibles por el usuario. */
     public function warehousesFor(User $user): Collection
@@ -58,9 +62,11 @@ class StockQueryService
         $balances = StockBalance::query()->whereIn('warehouse_id', $whIds)
             ->whereIn('product_id', $list->pluck('id'))->get()
             ->groupBy('product_id');
-        $inTransit = $this->shipments->inTransitByProduct($filters['warehouse_id'] ?? null ? (int) $filters['warehouse_id'] : null);
+        $whFilter = ($filters['warehouse_id'] ?? null) ? (int) $filters['warehouse_id'] : null;
+        $inTransit = $this->shipments->inTransitByProduct($whFilter);
+        $onLoan = $this->loans->onLoanByProduct($whFilter);
 
-        $rows = $list->map(function (Product $p) use ($warehouses, $balances, $inTransit) {
+        $rows = $list->map(function (Product $p) use ($warehouses, $balances, $inTransit, $onLoan) {
             $byWh = ($balances[$p->id] ?? collect())->keyBy('warehouse_id');
             $settings = $p->warehouseSettings->keyBy('warehouse_id');
             $cells = [];
@@ -87,7 +93,7 @@ class StockQueryService
                 'avg_cost' => $totalQty > 0 ? round($totalValue / $totalQty, 4) : 0,
                 'below_min' => $anyBelow,
                 'in_transit' => round((float) ($inTransit[$p->id]['qty'] ?? 0), 3),
-                'on_loan' => 0.0,      // fase 5
+                'on_loan' => round((float) ($onLoan[$p->id]['qty'] ?? 0), 3),
             ];
         });
 
@@ -126,13 +132,15 @@ class StockQueryService
         }
 
         $inTransit = $this->shipments->inTransitByProduct();
+        $onLoan = $this->loans->onLoanByProduct();
 
         return [
             'total_value' => $value,
             'products_with_stock' => $balances->pluck('product_id')->unique()->count(),
             'below_min' => $belowMin,
             'in_transit_value' => round((float) array_sum(array_column($inTransit, 'value')), 2),
-            'on_loan_count' => 0,
+            'on_loan_value' => round((float) array_sum(array_column($onLoan, 'value')), 2),
+            'on_loan_count' => count($onLoan),
         ];
     }
 

@@ -163,7 +163,7 @@ Los saldos por bodega/producto (cantidad y costo promedio) se mantienen en una t
 | **2. Inventario** ✅ | Recepciones parciales, kardex, saldos valorizados, devoluciones a proveedor, ajustes, conteos. | Stock real y valorizado por bodega. |
 | **3. Cuentas por pagar** ✅ | Facturas ligadas a recepciones, pagos, notas crédito, estado de cuenta por proveedor. | Control de lo que se debe y se ha pagado. |
 | **4. Logística** ✅ | Planillas con vehículo y chofer, tránsito, recepción en mina con novedades, PDF de planilla. | Mercancía llega a la mina con control. |
-| **5. Consumo en mina** | Vales de salida, préstamos y devoluciones, alertas de stock mínimo. | Descarga de inventario y control de herramientas. |
+| **5. Consumo en mina** ✅ | Vales de salida, préstamos y devoluciones, alertas de stock mínimo. | Descarga de inventario y control de herramientas. |
 | **6. Visibilidad** | Dashboard, reportes (kardex, valorizado, consumo por centro de costo, compras por proveedor, novedades, préstamos vencidos, cartera), notificaciones. | Gerencia ve el estado global. |
 
 Cada fase se entrega funcionando de punta a punta antes de pasar a la siguiente.

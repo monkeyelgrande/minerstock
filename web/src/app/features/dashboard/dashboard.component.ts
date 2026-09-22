@@ -18,6 +18,7 @@ interface DashboardData {
   quotations?: { expiring: number; received: number };
   approvals_pending?: { purchase_requests: number; purchase_orders: number };
   logistics?: { in_transit_count: number; in_transit_value: number; open_novelties: number; draft_shipments: number };
+  consumption?: { issues_month_count?: number; issues_month_value?: number; issues_draft?: number; loans_open?: number; loans_overdue?: number };
   payables?: { open_count: number; open_balance: number; overdue_count: number; overdue_balance: number; due_soon_balance: number; available_credit: number };
   stock?: { total_value: number; products_with_stock: number; below_min: number; in_transit_value: number; on_loan_count: number; receipts_draft: number; counts_open: number };
 }
@@ -117,6 +118,18 @@ export class DashboardComponent {
           ? `${d.logistics.open_novelties} ${d.logistics.open_novelties === 1 ? 'novedad abierta' : 'novedades abiertas'}`
           : `${new CurrencyPipe('es-CO').transform(d.logistics.in_transit_value, 'COP', 'symbol-narrow', '1.0-0')} en camino`,
         route: '/logistica/en-transito',
+      });
+    }
+    if (d?.consumption && d.consumption.issues_month_value !== undefined) {
+      list.push({
+        label: 'Consumo del mes',
+        value: new CurrencyPipe('es-CO').transform(d.consumption.issues_month_value, 'COP', 'symbol-narrow', '1.0-0') ?? '$0',
+        icon: 'exit_to_app',
+        tone: (d.consumption.loans_overdue ?? 0) > 0 ? 'bg-red-50 text-red-700' : 'bg-lime-50 text-lime-700',
+        note: (d.consumption.loans_overdue ?? 0) > 0
+          ? `${d.consumption.loans_overdue} ${d.consumption.loans_overdue === 1 ? 'préstamo vencido' : 'préstamos vencidos'}`
+          : `${d.consumption.issues_month_count ?? 0} vales · ${d.consumption.loans_open ?? 0} préstamos abiertos`,
+        route: '/bodega/vales',
       });
     }
     if (d?.payables) {

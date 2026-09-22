@@ -58,9 +58,9 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Bodega',
     items: [
-      { label: 'Vales de salida', icon: 'exit_to_app', route: '/bodega/vales', soon: true },
-      { label: 'Préstamos', icon: 'handshake', route: '/bodega/prestamos', soon: true },
-      { label: 'Herramientas por persona', icon: 'build_circle', route: '/bodega/herramientas', soon: true },
+      { label: 'Vales de salida', icon: 'exit_to_app', route: '/bodega/vales', permission: 'issues.view' },
+      { label: 'Préstamos', icon: 'handshake', route: '/bodega/prestamos', permission: 'loans.view' },
+      { label: 'Herramientas por persona', icon: 'build_circle', route: '/bodega/herramientas', permission: 'loans.view' },
     ],
   },
   {
