@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\Catalog\SupplierController;
 use App\Http\Controllers\Api\Catalog\UnitController;
 use App\Http\Controllers\Api\Catalog\VehicleController;
 use App\Http\Controllers\Api\Catalog\WarehouseController;
+use App\Http\Controllers\Api\Consumption\IssueController;
+use App\Http\Controllers\Api\Consumption\LoanController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\Inventory\AdjustmentController;
@@ -210,6 +212,31 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('novelties', [NoveltyController::class, 'index'])->middleware('permission:novelties.view');
         Route::get('novelties/counts', [NoveltyController::class, 'counts'])->middleware('permission:novelties.view');
         Route::post('novelties/{id}/resolve', [NoveltyController::class, 'resolve'])->middleware('permission:novelties.update');
+    });
+
+    // Consumo en mina
+    Route::prefix('consumption')->name('consumption.')->group(function () {
+        // Vales de salida
+        Route::get('issues', [IssueController::class, 'index'])->middleware('permission:issues.view');
+        Route::get('issues/counts', [IssueController::class, 'counts'])->middleware('permission:issues.view');
+        Route::get('issues/{id}', [IssueController::class, 'show'])->middleware('permission:issues.view');
+        Route::get('issues/{id}/pdf', [IssueController::class, 'pdf'])->middleware('permission:issues.view');
+        Route::post('issues', [IssueController::class, 'store'])->middleware('permission:issues.create');
+        Route::put('issues/{id}', [IssueController::class, 'update'])->middleware('permission:issues.update');
+        Route::post('issues/{id}/confirm', [IssueController::class, 'confirm'])->middleware('permission:issues.update');
+        Route::post('issues/{id}/cancel', [IssueController::class, 'cancel'])->middleware('permission:issues.delete');
+
+        // Préstamos de herramientas
+        Route::get('loans', [LoanController::class, 'index'])->middleware('permission:loans.view');
+        Route::get('loans/counts', [LoanController::class, 'counts'])->middleware('permission:loans.view');
+        Route::get('loans/holdings', [LoanController::class, 'holdings'])->middleware('permission:loans.view');
+        Route::get('loans/{id}', [LoanController::class, 'show'])->middleware('permission:loans.view');
+        Route::get('loans/{id}/pdf', [LoanController::class, 'pdf'])->middleware('permission:loans.view');
+        Route::post('loans', [LoanController::class, 'store'])->middleware('permission:loans.create');
+        Route::put('loans/{id}', [LoanController::class, 'update'])->middleware('permission:loans.update');
+        Route::post('loans/{id}/confirm', [LoanController::class, 'confirm'])->middleware('permission:loans.update');
+        Route::post('loans/{id}/cancel', [LoanController::class, 'cancel'])->middleware('permission:loans.delete');
+        Route::post('loans/{id}/returns', [LoanController::class, 'storeReturn'])->middleware('permission:loans.update');
     });
 
     // Cuentas por pagar

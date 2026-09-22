@@ -1,0 +1,130 @@
+<app-page-header
+  title="Herramientas por persona"
+  subtitle="Qué tiene cada receptor en su poder"
+  [crumbs]="[{ label: 'Bodega' }, { label: 'Herramientas por persona' }]"
+>
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Todas las bodegas"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event)"
+    styleClass="w-56"
+  />
+</app-page-header>
+
+<!-- ================= KPIs ================= -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+  <div class="card p-5 flex items-start justify-between gap-3">
+    <div class="min-w-0">
+      <span class="th-label block truncate">Receptores con herramientas</span>
+      <span class="text-[28px] leading-9 font-bold tabular mt-1 block text-ink">{{ holdings().length }}</span>
+    </div>
+    <div class="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 bg-[#EFF6FF] text-[#1D4ED8]">
+      <span class="material-symbols-outlined !text-[24px]">engineering</span>
+    </div>
+  </div>
+  <div class="card p-5 flex items-start justify-between gap-3">
+    <div class="min-w-0">
+      <span class="th-label block truncate">Herramientas en poder</span>
+      <span class="text-[28px] leading-9 font-bold tabular mt-1 block text-ink">{{ totalQty() | number: '1.0-3' }}</span>
+    </div>
+    <div class="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 bg-[#FFF7ED] text-[#C2410C]">
+      <span class="material-symbols-outlined !text-[24px]">handyman</span>
+    </div>
+  </div>
+  <div class="card p-5 flex items-start justify-between gap-3">
+    <div class="min-w-0">
+      <span class="th-label block truncate">Valor en poder</span>
+      <span class="text-[28px] leading-9 font-bold tabular mt-1 block text-ink">{{ totalValue() | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</span>
+    </div>
+    <div class="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 bg-[#ECFDF5] text-[#059669]">
+      <span class="material-symbols-outlined !text-[24px]">payments</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Tarjetas por receptor ================= -->
+@if (loading()) {
+  <div class="card card-body text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando herramientas en poder…</div>
+} @else if (!holdings().length) {
+  <div class="card card-body text-center py-14">
+    <div class="flex flex-col items-center gap-2 text-ink-3">
+      <span class="material-symbols-outlined !text-[36px]">verified</span>
+      <span class="text-sm">Nadie tiene herramientas en préstamo.</span>
+    </div>
+  </div>
+} @else {
+  <div class="space-y-4">
+    @for (h of holdings(); track h.recipient.id) {
+      <div class="card" [class.border-[#FECACA]]="h.has_overdue">
+        <div class="card-header flex-wrap gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="card-title truncate">{{ h.recipient.name }}</span>
+            @if (h.recipient.document_number) {
+              <span class="text-xs text-ink-3 tabular">{{ h.recipient.document_number }}</span>
+            }
+            @if (h.has_overdue) {
+              <span class="chip chip-danger !h-5 !px-1.5 text-[11px]">Con vencidos</span>
+            }
+          </div>
+          <div class="flex items-center gap-4 text-sm">
+            <span class="text-ink-2"><span class="font-semibold tabular text-ink">{{ h.total_qty | number: '1.0-3' }}</span> en poder</span>
+            <span class="font-semibold tabular text-ink">{{ h.total_value | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</span>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[720px]">
+            <thead>
+              <tr class="border-b border-line bg-[#F8FAFC]">
+                <th class="th-label text-left px-5 py-2">Herramienta</th>
+                <th class="th-label text-right px-3 py-2 w-32">Cantidad</th>
+                <th class="th-label text-right px-3 py-2 w-36">Valor</th>
+                <th class="th-label text-left px-5 py-2 min-w-[220px]">Préstamos</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (it of h.items; track it.product.id) {
+                <tr class="border-b border-line last:border-b-0">
+                  <td class="px-5 py-2.5">
+                    <div class="text-sm font-medium text-ink">{{ it.product.name }}</div>
+                    <div class="text-xs text-ink-3 tabular">{{ it.product.sku }}</div>
+                  </td>
+                  <td class="px-3 py-2.5 text-sm text-right tabular text-ink">
+                    {{ it.qty_base | number: '1.0-3' }} <span class="text-xs text-ink-3">{{ it.product.base_unit }}</span>
+                  </td>
+                  <td class="px-3 py-2.5 text-sm text-right tabular text-ink-2">{{ it.value | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</td>
+                  <td class="px-5 py-2.5">
+                    <div class="flex flex-wrap gap-1.5">
+                      @for (pr of it.loans; track pr.id) {
+                        <a
+                          class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium tabular transition-colors"
+                          [class.border-line]="!pr.is_overdue"
+                          [class.text-link]="!pr.is_overdue"
+                          [class.hover:bg-canvas]="!pr.is_overdue"
+                          [class.border-[#FECACA]]="pr.is_overdue"
+                          [class.bg-[#FEF2F2]]="pr.is_overdue"
+                          [class.text-[#B91C1C]]="pr.is_overdue"
+                          [routerLink]="['/bodega/prestamos', pr.id]"
+                          [pTooltip]="pr.is_overdue ? 'Vencido · esperado el ' + (pr.expected_return_at | date: 'dd/MM/yyyy') : (pr.expected_return_at ? 'Devolución esperada el ' + (pr.expected_return_at | date: 'dd/MM/yyyy') : 'Sin fecha esperada')"
+                          tooltipPosition="top"
+                        >
+                          @if (pr.is_overdue) {
+                            <span class="material-symbols-outlined !text-[13px]">warning</span>
+                          }
+                          {{ pr.number }} × {{ pr.qty_base | number: '1.0-3' }}
+                        </a>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+  </div>
+}

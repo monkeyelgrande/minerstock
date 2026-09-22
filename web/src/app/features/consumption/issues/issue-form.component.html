@@ -1,0 +1,245 @@
+<app-page-header
+  [title]="title()"
+  [subtitle]="isEdit() ? (issue()?.recipient?.name ?? '') : 'Entrega consumibles de la bodega a un receptor con cargo a un centro de costo'"
+  [crumbs]="[{ label: 'Bodega' }, { label: 'Vales de salida', route: '/bodega/vales' }, { label: isEdit() ? (issue()?.number ?? '…') : 'Nuevo' }]"
+>
+  <app-chip chip [tone]="statusTone()" [label]="statusLabel()" />
+  <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancel()" />
+  <p-button label="Guardar borrador" icon="pi pi-save" severity="secondary" [loading]="saving()" [disabled]="loading()" (onClick)="save(false)" />
+  <p-button label="Guardar y confirmar" icon="pi pi-check" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+</app-page-header>
+
+@if (exceededCount() > 0) {
+  <div class="flex items-start gap-3 rounded-card border border-[#FDE68A] bg-[#FFFBEB] px-4 py-3 mb-4 text-sm">
+    <span class="material-symbols-outlined text-[#B45309] !text-[20px]">warning</span>
+    <div>
+      <div class="font-semibold text-[#B45309]">{{ exceededCount() }} línea(s) superan el stock disponible</div>
+      <div class="text-ink-2 mt-0.5">Puedes guardar el borrador, pero al confirmar el sistema rechazará las líneas sin stock suficiente.</div>
+    </div>
+  </div>
+}
+
+<form [formGroup]="form" (ngSubmit)="save(false)" novalidate class="space-y-4">
+  <!-- ================= Datos ================= -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Datos</span>
+      @if (loading()) {
+        <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</span>
+      }
+    </div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <app-field label="Bodega" [required]="true" [control]="form.controls.warehouse_id" [serverError]="err('warehouse_id')" [submitted]="submitted()">
+        <p-select formControlName="warehouse_id" [options]="ctx.options()" optionLabel="name" optionValue="id" placeholder="Selecciona bodega" appendTo="body" styleClass="w-full">
+          <ng-template #item let-w>
+            <span class="tabular text-ink-3 mr-2">{{ w.code }}</span>{{ w.name }}
+          </ng-template>
+        </p-select>
+      </app-field>
+
+      <app-field label="Receptor" [required]="true" [control]="form.controls.recipient_id" [serverError]="err('recipient_id')" [submitted]="submitted()">
+        <p-select
+          formControlName="recipient_id"
+          [options]="recipients()"
+          optionLabel="name"
+          optionValue="id"
+          placeholder="Selecciona receptor"
+          [filter]="true"
+          filterPlaceholder="Buscar receptor…"
+          appendTo="body"
+          styleClass="w-full"
+        >
+          <ng-template #item let-r>
+            <div class="flex flex-col leading-tight">
+              <span class="text-sm">{{ r.name }}</span>
+              <span class="text-xs text-ink-3">
+                {{ r.type === 'area' ? 'Área' : 'Persona' }}@if (r.document_number) { · <span class="tabular">{{ r.document_number }}</span> }
+              </span>
+            </div>
+          </ng-template>
+        </p-select>
+      </app-field>
+
+      <app-field label="Centro de costo" hint="Por defecto, el del receptor" [control]="form.controls.cost_center_id" [serverError]="err('cost_center_id')" [submitted]="submitted()">
+        <p-select
+          formControlName="cost_center_id"
+          [options]="costCenters()"
+          optionLabel="name"
+          optionValue="id"
+          placeholder="Centro de costo"
+          [showClear]="true"
+          [filter]="costCenters().length > 8"
+          filterPlaceholder="Buscar centro de costo…"
+          appendTo="body"
+          styleClass="w-full"
+        >
+          <ng-template #item let-c>
+            <span class="tabular text-ink-3 mr-2">{{ c.code }}</span>{{ c.name }}
+          </ng-template>
+        </p-select>
+      </app-field>
+
+      <app-field label="Fecha" [required]="true" [control]="form.controls.date" [serverError]="err('date')" [submitted]="submitted()">
+        <p-datepicker formControlName="date" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full tabular" />
+      </app-field>
+
+      <div class="md:col-span-2 xl:col-span-4">
+        <app-field label="Observaciones" [serverError]="err('notes')">
+          <textarea pTextarea formControlName="notes" rows="2" class="w-full" placeholder="Frente de trabajo, orden de trabajo, referencias…"></textarea>
+        </app-field>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Ítems ================= -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Ítems</div>
+        <p class="text-xs text-ink-3 mt-0.5">Busca el producto, elige la unidad y la cantidad. Al confirmar, la salida se valora al costo promedio de la bodega.</p>
+      </div>
+      <p-button label="Agregar ítem" icon="pi pi-plus" severity="secondary" [outlined]="true" size="small" [disabled]="loading()" (onClick)="addItem()" />
+    </div>
+
+    @if (!itemsArray.length) {
+      <div class="card-body text-center py-10">
+        <div class="flex flex-col items-center gap-2 text-ink-3">
+          <span class="material-symbols-outlined !text-[36px]">exit_to_app</span>
+          <span class="text-sm">El vale aún no tiene ítems.</span>
+          @if (submitted()) {
+            <span class="field-error">Agrega al menos un ítem.</span>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="overflow-x-auto" formArrayName="items">
+        <table class="w-full min-w-[1100px]">
+          <thead>
+            <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+              <th class="th-label text-left px-5 py-2.5 min-w-[240px]">Producto</th>
+              <th class="th-label text-left px-3 py-2.5 w-48">Unidad</th>
+              <th class="th-label text-right px-3 py-2.5 w-40">Cantidad</th>
+              <th class="th-label text-right px-3 py-2.5 w-36">Stock disponible</th>
+              <th class="th-label text-left px-3 py-2.5 min-w-[160px]">Observación</th>
+              <th class="w-12"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of itemsArray.controls; track g; let i = $index) {
+              @let meta = rowMeta()[i];
+              <tr [formGroupName]="i" class="border-b border-line last:border-b-0 align-top">
+                <td class="px-5 py-3">
+                  <app-product-picker formControlName="product" />
+                  @if (g.controls.product.value; as p) {
+                    <div class="text-xs text-ink-3 tabular mt-1">{{ p.sku }} · base {{ p.base_unit?.code }}</div>
+                  }
+                  @if (err('items.' + i + '.product_id'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (showError(g, 'product')) {
+                    <p class="field-error">Selecciona un producto.</p>
+                  }
+                </td>
+                <td class="px-3 py-3">
+                  <p-select formControlName="unit_id" [options]="meta?.options ?? []" optionLabel="label" optionValue="id" placeholder="Unidad" appendTo="body" styleClass="w-full">
+                    <ng-template #selectedItem let-u>
+                      <span class="font-medium">{{ u?.code }}</span>
+                    </ng-template>
+                    <ng-template #item let-u>
+                      <div class="flex flex-col leading-tight">
+                        <span class="text-sm">{{ u.label }}</span>
+                        @if (u.hint) {
+                          <span class="text-xs text-ink-3 tabular">{{ u.hint }}</span>
+                        }
+                      </div>
+                    </ng-template>
+                  </p-select>
+                  @if (meta?.hint; as hint) {
+                    <div class="text-xs text-ink-3 mt-1 tabular">{{ hint }}</div>
+                  }
+                  @if (err('items.' + i + '.unit_id'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (showError(g, 'unit_id')) {
+                    <p class="field-error">Selecciona una unidad.</p>
+                  }
+                </td>
+                <td class="px-3 py-3">
+                  <p-inputnumber
+                    formControlName="quantity"
+                    mode="decimal"
+                    locale="es-CO"
+                    [min]="0"
+                    [minFractionDigits]="0"
+                    [maxFractionDigits]="meta?.decimals ?? 0"
+                    placeholder="0"
+                    [suffix]="meta?.unit?.code ? ' ' + meta?.unit?.code : ''"
+                    styleClass="w-full"
+                    inputStyleClass="w-full tabular text-right"
+                  />
+                  @if (meta?.equivalent; as eq) {
+                    <div class="text-xs text-ink-3 mt-1 tabular text-right">{{ eq }}</div>
+                  }
+                  @if (err('items.' + i + '.quantity'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (showError(g, 'quantity')) {
+                    <p class="field-error">Ingresa una cantidad mayor que 0.</p>
+                  }
+                </td>
+                <td class="px-3 py-3 text-right tabular pt-[1.15rem]">
+                  @if (g.controls.product.value) {
+                    @if (meta?.stockLoaded) {
+                      <div class="text-sm font-medium" [class.text-ink]="!meta?.exceeded" [class.text-[#B91C1C]]="meta?.exceeded">
+                        {{ fmt(meta?.stock ?? 0) }} <span class="text-xs font-normal" [class.text-ink-3]="!meta?.exceeded" [class.text-[#B91C1C]]="meta?.exceeded">{{ meta?.baseCode }}</span>
+                      </div>
+                      @if (meta?.exceeded) {
+                        <div class="text-[11px] text-[#B91C1C]">Stock insuficiente</div>
+                      }
+                    } @else {
+                      <i class="pi pi-spin pi-spinner text-ink-3"></i>
+                    }
+                  } @else {
+                    <span class="text-ink-3 text-sm">—</span>
+                  }
+                </td>
+                <td class="px-3 py-3">
+                  <input pInputText formControlName="notes" class="w-full" placeholder="Opcional" maxlength="255" />
+                  @if (err('items.' + i + '.notes'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  }
+                </td>
+                <td class="px-2 py-2 text-right">
+                  <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Quitar ítem" tooltipPosition="left" (onClick)="removeItem(i)" />
+                </td>
+              </tr>
+              @for (msg of rowErrors(i, ['product_id', 'unit_id', 'quantity', 'notes']); track msg) {
+                <tr class="border-b border-line">
+                  <td colspan="6" class="px-5 pb-2 field-error">{{ msg }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-4 px-5 py-3 border-t border-line text-xs text-ink-3">
+        <span>{{ itemsArray.length }} ítem(s)</span>
+        @if (exceededCount() > 0) {
+          <span class="inline-flex items-center gap-1 text-[#B91C1C] font-medium"><span class="material-symbols-outlined !text-[14px]">warning</span>{{ exceededCount() }} línea(s) superan el stock disponible</span>
+        }
+      </div>
+    }
+    @if (err('items'); as e) {
+      <p class="field-error px-5 py-3 border-t border-line">{{ e }}</p>
+    }
+  </div>
+
+  <!-- ================= Adjuntos (solo en edición) ================= -->
+  @if (issue(); as v) {
+    <app-attachments [type]="attachType" [documentId]="v.id" [items]="v.attachments ?? []" [canEdit]="true" (changed)="reloadIssue()" />
+  }
+
+  <div class="flex justify-end gap-2">
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" [disabled]="saving()" (onClick)="cancel()" />
+    <p-button label="Guardar borrador" icon="pi pi-save" severity="secondary" type="submit" [loading]="saving()" [disabled]="loading()" />
+    <p-button label="Guardar y confirmar" icon="pi pi-check" type="button" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+  </div>
+</form>

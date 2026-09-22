@@ -1,0 +1,224 @@
+<app-page-header
+  [title]="title()"
+  [subtitle]="isEdit() ? (loan()?.warehouse?.name ?? '') : 'Entrega herramientas retornables a una persona o área'"
+  [crumbs]="[{ label: 'Bodega' }, { label: 'Préstamos', route: '/bodega/prestamos' }, { label: isEdit() ? (loan()?.number ?? '…') : 'Nuevo' }]"
+>
+  @if (isEdit() && loan(); as l) {
+    <app-chip chip [tone]="loanTone(l.status)" [label]="l.status_label" />
+  }
+  <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancel()" />
+  <p-button label="Guardar borrador" icon="pi pi-save" severity="secondary" [loading]="saving()" [disabled]="loading()" (onClick)="save(false)" />
+  <p-button label="Guardar y confirmar" icon="pi pi-check" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+</app-page-header>
+
+<form [formGroup]="form" (ngSubmit)="save(false)" novalidate class="space-y-4">
+  <!-- ================= Datos ================= -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Datos</span>
+      @if (loading()) {
+        <span class="text-xs text-ink-3"><i class="pi pi-spin pi-spinner mr-1"></i>Cargando…</span>
+      }
+    </div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <app-field label="Bodega" [required]="true" [control]="form.controls.warehouse_id" [serverError]="err('warehouse_id')" [submitted]="submitted()">
+        <p-select
+          formControlName="warehouse_id"
+          [options]="ctx.options()"
+          optionLabel="name"
+          optionValue="id"
+          placeholder="Selecciona bodega"
+          appendTo="body"
+          styleClass="w-full"
+          (onChange)="onWarehouseChange()"
+        >
+          <ng-template #item let-w>
+            <span class="tabular text-ink-3 mr-2">{{ w.code }}</span>{{ w.name }}
+          </ng-template>
+        </p-select>
+      </app-field>
+      <app-field label="Receptor" [required]="true" [control]="form.controls.recipient_id" [serverError]="err('recipient_id')" [submitted]="submitted()">
+        <p-select
+          formControlName="recipient_id"
+          [options]="recipients()"
+          optionLabel="name"
+          optionValue="id"
+          [filter]="true"
+          filterBy="name,document_number"
+          placeholder="Selecciona receptor"
+          appendTo="body"
+          styleClass="w-full"
+        >
+          <ng-template #item let-r>
+            <div class="flex flex-col leading-tight">
+              <span class="text-sm">{{ r.name }}</span>
+              @if (r.document_number) {
+                <span class="text-xs text-ink-3 tabular">{{ r.document_number }}</span>
+              }
+            </div>
+          </ng-template>
+        </p-select>
+      </app-field>
+      <app-field label="Fecha de préstamo" [required]="true" [control]="form.controls.loaned_at" [serverError]="err('loaned_at')" [submitted]="submitted()">
+        <p-datepicker formControlName="loaned_at" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" placeholder="dd/mm/aaaa" styleClass="w-full" inputStyleClass="w-full" />
+      </app-field>
+      <app-field
+        label="Devolución esperada"
+        [control]="form.controls.expected_return_at"
+        [serverError]="err('expected_return_at')"
+        [submitted]="submitted()"
+        hint="Opcional; con fecha vencida el préstamo se marca en rojo"
+      >
+        <p-datepicker
+          formControlName="expected_return_at"
+          dateFormat="dd/mm/yy"
+          [showIcon]="true"
+          [showClear]="true"
+          [minDate]="minReturnDate()"
+          appendTo="body"
+          placeholder="dd/mm/aaaa"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </app-field>
+      <div class="md:col-span-2 xl:col-span-4">
+        <app-field label="Observaciones" [serverError]="err('notes')">
+          <textarea pTextarea formControlName="notes" rows="2" class="w-full" placeholder="Obra o labor, condiciones de la entrega, etc."></textarea>
+        </app-field>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Herramientas ================= -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Herramientas</div>
+        <p class="text-xs text-ink-3 mt-0.5">Solo productos retornables. Las cantidades van en la unidad base del producto.</p>
+      </div>
+      <p-button label="Agregar herramienta" icon="pi pi-plus" severity="secondary" [outlined]="true" size="small" (onClick)="addItem()" />
+    </div>
+
+    @if (!itemsArray.length) {
+      <div class="card-body text-center py-10">
+        <div class="flex flex-col items-center gap-2 text-ink-3">
+          <span class="material-symbols-outlined !text-[36px]">handyman</span>
+          <span class="text-sm">El préstamo aún no tiene herramientas.</span>
+          @if (submitted()) {
+            <span class="field-error">Agrega al menos una herramienta.</span>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="overflow-x-auto" formArrayName="items">
+        <table class="w-full min-w-[980px]">
+          <thead>
+            <tr class="border-b border-[#CBD5E1] bg-[#F8FAFC]">
+              <th class="th-label text-left px-5 py-2.5 min-w-[260px]">Producto</th>
+              <th class="th-label text-right px-3 py-2.5 w-36">Stock disponible</th>
+              <th class="th-label text-right px-3 py-2.5 w-40">Cantidad</th>
+              <th class="th-label text-left px-3 py-2.5 min-w-[180px]">Observación</th>
+              <th class="w-12"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (g of itemsArray.controls; track g; let i = $index) {
+              @let info = rowInfo()[i];
+              <tr [formGroupName]="i" class="border-b border-line last:border-b-0 align-top">
+                <td class="px-5 py-3">
+                  <app-product-picker formControlName="product" placeholder="Buscar herramienta por SKU o nombre…" />
+                  @if (g.getRawValue().product; as p) {
+                    <div class="text-xs text-ink-3 tabular mt-1">{{ p.sku }} · base {{ p.base_unit?.code }}</div>
+                  }
+                  @if (err('items.' + i + '.product_id'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (notRetornable(g)) {
+                    <p class="field-error">Solo se prestan productos retornables (herramientas).</p>
+                  } @else if (showError(g, 'product')) {
+                    <p class="field-error">Selecciona una herramienta.</p>
+                  } @else if (!g.getRawValue().product) {
+                    <p class="field-hint">Solo productos retornables</p>
+                  }
+                </td>
+                <td class="px-3 py-3 text-right tabular pt-[1.15rem]">
+                  @if (g.getRawValue().product) {
+                    @if (info.loaded) {
+                      <div class="text-sm font-medium" [class.text-ink]="!info.exceeded" [class.text-[#B91C1C]]="info.exceeded">
+                        {{ info.available | number: '1.0-3' }} <span class="text-xs text-ink-3 font-normal">{{ info.unit }}</span>
+                      </div>
+                      @if (info.exceeded) {
+                        <div class="text-[11px] text-[#B91C1C]">Cantidad mayor al stock</div>
+                      }
+                    } @else {
+                      <i class="pi pi-spin pi-spinner text-ink-3"></i>
+                    }
+                  } @else {
+                    <span class="text-ink-3 text-sm">—</span>
+                  }
+                </td>
+                <td class="px-3 py-3">
+                  <p-inputnumber
+                    formControlName="qty_base"
+                    mode="decimal"
+                    [min]="0"
+                    [minFractionDigits]="0"
+                    [maxFractionDigits]="3"
+                    locale="es-CO"
+                    placeholder="0"
+                    [suffix]="info.unit ? ' ' + info.unit : ''"
+                    styleClass="w-full"
+                    inputStyleClass="w-full tabular text-right"
+                  />
+                  @if (err('items.' + i + '.qty_base'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  } @else if (showError(g, 'qty_base')) {
+                    <p class="field-error">Ingresa una cantidad mayor que 0.</p>
+                  }
+                </td>
+                <td class="px-3 py-3">
+                  <input pInputText formControlName="notes" class="w-full" placeholder="Opcional" maxlength="255" />
+                  @if (err('items.' + i + '.notes'); as e) {
+                    <p class="field-error">{{ e }}</p>
+                  }
+                </td>
+                <td class="px-2 py-2 text-right">
+                  <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" pTooltip="Quitar" (onClick)="removeItem(i)" />
+                </td>
+              </tr>
+              @for (msg of rowErrors(i, ['product_id', 'qty_base', 'notes']); track msg) {
+                <tr class="border-b border-line">
+                  <td colspan="5" class="px-5 pb-2 field-error">{{ msg }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-4 px-5 py-3 border-t border-line text-xs text-ink-3">
+        <span>{{ itemsArray.length }} herramienta(s)</span>
+        @if (exceededCount() > 0) {
+          <span class="inline-flex items-center gap-1 text-[#B91C1C] font-medium">
+            <span class="material-symbols-outlined !text-[14px]">warning</span>{{ exceededCount() }} línea(s) superan el stock disponible
+          </span>
+        }
+        <span class="flex-1"></span>
+        <span>Al confirmar se descuentan del stock al costo promedio de la bodega.</span>
+      </div>
+    }
+    @if (err('items'); as e) {
+      <p class="field-error px-5 py-3 border-t border-line">{{ e }}</p>
+    }
+  </div>
+
+  <!-- ================= Adjuntos (solo en edición) ================= -->
+  @if (loan(); as l) {
+    <app-attachments [type]="attachType" [documentId]="l.id" [items]="l.attachments ?? []" [canEdit]="true" (changed)="reloadLoan()" />
+  }
+
+  <div class="flex justify-end gap-2">
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" [disabled]="saving()" (onClick)="cancel()" />
+    <p-button label="Guardar borrador" icon="pi pi-save" severity="secondary" type="submit" [loading]="saving()" [disabled]="loading()" />
+    <p-button label="Guardar y confirmar" icon="pi pi-check" type="button" [loading]="saving()" [disabled]="loading()" (onClick)="save(true)" />
+  </div>
+</form>

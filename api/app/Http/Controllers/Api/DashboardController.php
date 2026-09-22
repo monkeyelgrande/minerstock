@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\GoodsReceipt;
+use App\Models\Issue;
+use App\Models\Loan;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\Quotation;
@@ -91,6 +93,24 @@ class DashboardController extends Controller
                     : 0,
                 'draft_shipments' => Shipment::query()->visibleTo($user)->where('status', 'borrador')->count(),
             ];
+        }
+
+        if ($user->can('issues.view') || $user->can('loans.view')) {
+            $consumption = [];
+            if ($user->can('issues.view')) {
+                $issues = Issue::query()->visibleTo($user)->where('status', 'confirmado')
+                    ->whereMonth('date', now()->month)->whereYear('date', now()->year)
+                    ->with('items')->get();
+                $consumption['issues_month_count'] = $issues->count();
+                $consumption['issues_month_value'] = round((float) $issues->sum(fn (Issue $i) => $i->total()), 2);
+                $consumption['issues_draft'] = Issue::query()->visibleTo($user)->where('status', 'borrador')->count();
+            }
+            if ($user->can('loans.view')) {
+                $consumption['loans_open'] = Loan::query()->visibleTo($user)
+                    ->whereIn('status', ['abierto', 'parcial'])->count();
+                $consumption['loans_overdue'] = Loan::query()->visibleTo($user)->overdue()->count();
+            }
+            $data['consumption'] = $consumption;
         }
 
         if ($user->can('supplier_invoices.view')) {

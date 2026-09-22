@@ -1,0 +1,196 @@
+<app-page-header
+  title="Vales de salida"
+  subtitle="Entregas de consumibles a receptores"
+  [crumbs]="[{ label: 'Bodega' }, { label: 'Vales de salida' }]"
+>
+  @if (canCreate()) {
+    <p-button label="Nuevo vale" icon="pi pi-plus" (onClick)="goCreate()" />
+  }
+</app-page-header>
+
+<!-- Pestañas por estado -->
+<div class="flex flex-wrap items-center gap-1 border-b border-line mb-4 -mt-2">
+  @for (t of tabs; track t.key) {
+    <button
+      type="button"
+      class="flex items-center gap-2 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors"
+      [class.border-brand]="tab() === t.key"
+      [class.text-ink]="tab() === t.key"
+      [class.font-semibold]="tab() === t.key"
+      [class.border-transparent]="tab() !== t.key"
+      [class.text-ink-3]="tab() !== t.key"
+      [class.hover:text-ink]="tab() !== t.key"
+      (click)="selectTab(t.key)"
+    >
+      {{ t.label }}
+      <span
+        class="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-semibold tabular"
+        [class.bg-amber-100]="tab() === t.key"
+        [class.text-amber-800]="tab() === t.key"
+        [class.bg-slate-100]="tab() !== t.key"
+        [class.text-slate-600]="tab() !== t.key"
+      >{{ countFor(t) }}</span>
+    </button>
+  }
+</div>
+
+<app-crud-toolbar [(search)]="search" searchPlaceholder="Buscar por número, receptor o producto…" [showActiveFilter]="false" [createLabel]="null">
+  <p-select
+    [options]="ctx.options()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Bodega"
+    [showClear]="true"
+    [ngModel]="warehouseId()"
+    (ngModelChange)="setWarehouse($event)"
+    styleClass="w-48"
+  />
+  <p-select
+    [options]="recipients()"
+    optionLabel="name"
+    optionValue="id"
+    placeholder="Receptor"
+    [showClear]="true"
+    [filter]="true"
+    filterPlaceholder="Buscar receptor…"
+    [ngModel]="recipientId()"
+    (ngModelChange)="setRecipient($event)"
+    styleClass="w-52"
+  >
+    <ng-template #item let-r>
+      <div class="flex flex-col leading-tight">
+        <span class="text-sm">{{ r.name }}</span>
+        @if (r.document_number) {
+          <span class="text-xs text-ink-3 tabular">{{ r.document_number }}</span>
+        }
+      </div>
+    </ng-template>
+  </p-select>
+  <div class="flex items-center gap-1.5">
+    <p-datepicker
+      [ngModel]="dateFrom()"
+      (ngModelChange)="setDateFrom($event)"
+      dateFormat="dd/mm/yy"
+      [showIcon]="true"
+      [showClear]="true"
+      [maxDate]="dateTo()"
+      appendTo="body"
+      placeholder="Desde"
+      styleClass="w-40"
+      inputStyleClass="w-full"
+    />
+    <span class="text-ink-3 text-xs">—</span>
+    <p-datepicker
+      [ngModel]="dateTo()"
+      (ngModelChange)="setDateTo($event)"
+      dateFormat="dd/mm/yy"
+      [showIcon]="true"
+      [showClear]="true"
+      [minDate]="dateFrom()"
+      appendTo="body"
+      placeholder="Hasta"
+      styleClass="w-40"
+      inputStyleClass="w-full"
+    />
+  </div>
+</app-crud-toolbar>
+
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    sortField="created_at"
+    [sortOrder]="-1"
+    dataKey="id"
+  >
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="number" class="w-32">Número <p-sortIcon field="number" /></th>
+        <th pSortableColumn="date" class="w-28">Fecha <p-sortIcon field="date" /></th>
+        <th>Bodega</th>
+        <th>Receptor</th>
+        <th>Centro de costo</th>
+        <th class="w-20 text-right">Ítems</th>
+        <th class="w-36 text-right">Total</th>
+        <th pSortableColumn="status" class="w-32">Estado <p-sortIcon field="status" /></th>
+        <th class="w-32 text-right">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-row>
+      <tr>
+        <td>
+          <a class="doc-link" [routerLink]="['/bodega/vales', row.id]">{{ row.number }}</a>
+        </td>
+        <td class="tabular text-ink-2">{{ row.date | date: 'dd/MM/yyyy' }}</td>
+        <td>
+          <div class="text-ink">{{ row.warehouse?.name ?? '—' }}</div>
+          @if (row.warehouse?.code) {
+            <div class="text-xs text-ink-3 tabular">{{ row.warehouse.code }}</div>
+          }
+        </td>
+        <td>
+          <div class="text-ink">{{ row.recipient?.name ?? '—' }}</div>
+          @if (row.recipient?.document_number) {
+            <div class="text-xs text-ink-3 tabular">{{ row.recipient.document_number }}</div>
+          }
+        </td>
+        <td>
+          @if (row.cost_center) {
+            <div class="text-ink">{{ row.cost_center.name }}</div>
+            <div class="text-xs text-ink-3 tabular">{{ row.cost_center.code }}</div>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td class="tabular text-right text-ink-2">{{ row.items_count ?? '—' }}</td>
+        <td class="tabular text-right">
+          @if (row.status === 'borrador' && !(row.total > 0)) {
+            <span class="text-ink-3" pTooltip="Se valora al costo promedio al confirmar" tooltipPosition="top">—</span>
+          } @else {
+            <span class="text-ink">{{ row.total | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</span>
+          }
+        </td>
+        <td><app-chip [tone]="statusTone(row.status)" [label]="row.status_label" /></td>
+        <td class="text-right whitespace-nowrap">
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Ver detalle" (onClick)="goDetail(row)" />
+          @if (row.is_editable && canUpdate()) {
+            <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" severity="secondary" size="small" pTooltip="Editar" (onClick)="goEdit(row)" />
+          }
+          <p-button
+            icon="pi pi-file-pdf"
+            [text]="true"
+            [rounded]="true"
+            severity="secondary"
+            size="small"
+            pTooltip="Ver PDF"
+            [loading]="downloading() === row.id"
+            [disabled]="downloading() !== null"
+            (onClick)="downloadPdf(row)"
+          />
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="9" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">exit_to_app</span>
+            <span class="text-sm">No hay vales que coincidan con los filtros.</span>
+            @if (canCreate() && tab() === 'all' && !search()) {
+              <p-button label="Crear el primer vale" icon="pi pi-plus" [text]="true" size="small" (onClick)="goCreate()" />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

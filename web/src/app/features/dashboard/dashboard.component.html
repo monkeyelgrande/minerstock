@@ -129,6 +129,18 @@
                 <a routerLink="/logistica/planillas" [queryParams]="{ status: 'borrador' }" class="hover:underline">{{ d.logistics.draft_shipments }} {{ d.logistics.draft_shipments === 1 ? 'planilla en borrador' : 'planillas en borrador' }} por despachar</a>
               </li>
             }
+            @if (d.consumption && (d.consumption.loans_overdue ?? 0) > 0 && auth.can('loans.update')) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-red-600 mt-0.5">handshake</span>
+                <a routerLink="/bodega/prestamos" [queryParams]="{ overdue: 1 }" class="hover:underline">{{ d.consumption.loans_overdue }} {{ d.consumption.loans_overdue === 1 ? 'préstamo vencido' : 'préstamos vencidos' }} por reclamar</a>
+              </li>
+            }
+            @if (d.consumption && (d.consumption.issues_draft ?? 0) > 0 && auth.can('issues.update')) {
+              <li class="flex items-start gap-2">
+                <span class="material-symbols-outlined !text-[18px] text-lime-600 mt-0.5">exit_to_app</span>
+                <a routerLink="/bodega/vales" [queryParams]="{ status: 'borrador' }" class="hover:underline">{{ d.consumption.issues_draft }} {{ d.consumption.issues_draft === 1 ? 'vale en borrador' : 'vales en borrador' }} por confirmar</a>
+              </li>
+            }
             @if (d.payables && d.payables.overdue_count > 0 && auth.can('supplier_payments.create')) {
               <li class="flex items-start gap-2">
                 <span class="material-symbols-outlined !text-[18px] text-red-600 mt-0.5">event_busy</span>
@@ -166,7 +178,7 @@
               </li>
             }
           </ul>
-          @if (!d.approvals_pending?.purchase_requests && !d.approvals_pending?.purchase_orders && !d.purchase_requests?.aprobada && !d.quotations?.received && !d.purchase_orders?.aprobada && !d.purchase_requests?.rechazada && !d.stock?.below_min && !d.stock?.receipts_draft && !d.stock?.counts_open && !d.payables?.overdue_count && !d.payables?.available_credit && !d.logistics?.open_novelties && !d.logistics?.draft_shipments) {
+          @if (!d.approvals_pending?.purchase_requests && !d.approvals_pending?.purchase_orders && !d.purchase_requests?.aprobada && !d.quotations?.received && !d.purchase_orders?.aprobada && !d.purchase_requests?.rechazada && !d.stock?.below_min && !d.stock?.receipts_draft && !d.stock?.counts_open && !d.payables?.overdue_count && !d.payables?.available_credit && !d.logistics?.open_novelties && !d.logistics?.draft_shipments && !d.consumption?.loans_overdue && !d.consumption?.issues_draft) {
             <p class="text-sm text-ink-3">Nada pendiente por ahora.</p>
           }
         } @else {
@@ -182,6 +194,7 @@
         <div class="flex items-center gap-2"><span class="chip chip-success">Fase 2</span> Inventario</div>
         <div class="flex items-center gap-2"><span class="chip chip-success">Fase 3</span> Cuentas por pagar</div>
         <div class="flex items-center gap-2"><span class="chip chip-success">Fase 4</span> Logística</div>
+        <div class="flex items-center gap-2"><span class="chip chip-success">Fase 5</span> Consumo en mina</div>
       </div>
     </div>
   </div>
