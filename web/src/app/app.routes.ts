@@ -48,6 +48,11 @@ export const routes: Routes = [
         loadChildren: () => import('./features/payables/payables.routes').then((m) => m.PAYABLES_ROUTES),
       },
       {
+        path: 'reportes',
+        canActivateChild: [permissionGuard],
+        loadChildren: () => import('./features/reports/reports.routes').then((m) => m.REPORTS_ROUTES),
+      },
+      {
         path: 'catalogo',
         canActivateChild: [permissionGuard],
         loadChildren: () => import('./features/catalog/catalog.routes').then((m) => m.CATALOG_ROUTES),

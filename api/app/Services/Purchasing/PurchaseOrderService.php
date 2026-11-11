@@ -9,11 +9,15 @@ use App\Models\PurchaseRequest;
 use App\Models\PurchaseRequestItem;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Notifications\NotifierService;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseOrderService
 {
-    public function __construct(private readonly PurchaseRequestService $requests) {}
+    public function __construct(
+        private readonly PurchaseRequestService $requests,
+        private readonly NotifierService $notifier,
+    ) {}
 
     public function save(?PurchaseOrder $order, array $data, User $user): PurchaseOrder
     {
@@ -94,12 +98,22 @@ class PurchaseOrderService
             throw new DomainException('La orden no tiene ítems.');
         }
 
-        return DB::transaction(function () use ($order, $user) {
+        $order = DB::transaction(function () use ($order, $user) {
             $order->forceFill(['status' => S::PendienteAprobacion, 'submitted_at' => now(), 'rejection_reason' => null])->save();
             $order->approvals()->create(['requested_by' => $user->id, 'status' => 'pendiente']);
 
             return $order;
         });
+
+        $this->notifier->notify('purchase_orders.approve', [
+            'key' => "oc-submit-{$order->id}",
+            'title' => 'Orden de compra pendiente de aprobación',
+            'body' => "{$order->number} · ".($order->supplier?->name ?? '').' · $ '.number_format((float) $order->total, 0, ',', '.'),
+            'icon' => 'shopping_cart_checkout',
+            'route' => '/compras/aprobaciones',
+        ], $user);
+
+        return $order;
     }
 
     /** Aprobar compromete las cantidades en las solicitudes de origen. */

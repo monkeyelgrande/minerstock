@@ -42,6 +42,8 @@ class RolePermissionSeeder extends Seeder
         // Consumo en mina (fase 5)
         'issues.view', 'issues.create', 'issues.update', 'issues.delete',
         'loans.view', 'loans.create', 'loans.update', 'loans.delete',
+        // Reportes (fase 6)
+        'reports.view',
     ];
 
     public function run(): void
@@ -91,7 +93,7 @@ class RolePermissionSeeder extends Seeder
         $matrix = [
             'admin' => $all,
             'solicitante' => array_merge(['products.view', 'product_categories.view', 'units.view', 'warehouses.view', 'sites.view'], $requestsBasic),
-            'aprobador' => array_merge($catalogViews, $purchasingViews, ['purchase_requests.approve', 'purchase_orders.approve'], $inventoryViews, $logisticsViews, $consumptionViews),
+            'aprobador' => array_merge($catalogViews, $purchasingViews, ['purchase_requests.approve', 'purchase_orders.approve'], $inventoryViews, $logisticsViews, $consumptionViews, ['reports.view']),
             'comprador' => array_merge($catalogViews, $requestsBasic, [
                 'suppliers.create', 'suppliers.update', 'suppliers.delete',
                 'products.create', 'products.update',
@@ -100,10 +102,10 @@ class RolePermissionSeeder extends Seeder
                 'quotations.view', 'quotations.create', 'quotations.update', 'quotations.delete',
                 'purchase_orders.view', 'purchase_orders.create', 'purchase_orders.update', 'purchase_orders.delete', 'purchase_orders.issue',
                 'approvals.view',
-            ], $receiptsAll, $returnsAll, ['stock.view', 'adjustments.view', 'stock_counts.view'], $payablesViews, $logisticsAll),
-            'tesoreria' => array_merge(['suppliers.view', 'purchase_orders.view', 'goods_receipts.view', 'supplier_returns.view', 'stock.view'], $payablesAll),
-            'bodeguero' => array_merge($catalogViews, ['recipients.create', 'recipients.update'], $requestsBasic, $receiptsAll, $adjustmentsAll, $countsAll, ['stock.view', 'supplier_returns.view'], $logisticsAll, $consumptionAll),
-            'consulta' => array_merge($catalogViews, $purchasingViews, $inventoryViews, $payablesViews, $logisticsViews, $consumptionViews),
+            ], $receiptsAll, $returnsAll, ['stock.view', 'adjustments.view', 'stock_counts.view', 'reports.view'], $payablesViews, $logisticsAll),
+            'tesoreria' => array_merge(['suppliers.view', 'purchase_orders.view', 'goods_receipts.view', 'supplier_returns.view', 'stock.view', 'reports.view'], $payablesAll),
+            'bodeguero' => array_merge($catalogViews, ['recipients.create', 'recipients.update'], $requestsBasic, $receiptsAll, $adjustmentsAll, $countsAll, ['stock.view', 'supplier_returns.view', 'reports.view'], $logisticsAll, $consumptionAll),
+            'consulta' => array_merge($catalogViews, $purchasingViews, $inventoryViews, $payablesViews, $logisticsViews, $consumptionViews, ['reports.view']),
         ];
 
         foreach (config('minerstock.roles') as $name => $label) {

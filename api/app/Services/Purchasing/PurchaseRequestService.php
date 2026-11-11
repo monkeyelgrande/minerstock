@@ -6,10 +6,13 @@ use App\Enums\PurchaseRequestStatus as S;
 use App\Exceptions\DomainException;
 use App\Models\PurchaseRequest;
 use App\Models\User;
+use App\Services\Notifications\NotifierService;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseRequestService
 {
+    public function __construct(private readonly NotifierService $notifier) {}
+
     /** Crea o actualiza una solicitud en borrador (o rechazada, que vuelve a borrador). */
     public function save(?PurchaseRequest $request, array $data, User $user): PurchaseRequest
     {
@@ -64,7 +67,7 @@ class PurchaseRequestService
             throw new DomainException('La solicitud no tiene ítems.');
         }
 
-        return DB::transaction(function () use ($request, $user) {
+        $request = DB::transaction(function () use ($request, $user) {
             $request->forceFill([
                 'status' => S::Enviada,
                 'submitted_at' => now(),
@@ -74,30 +77,61 @@ class PurchaseRequestService
 
             return $request;
         });
+
+        $this->notifier->notify('purchase_requests.approve', [
+            'key' => "sc-submit-{$request->id}",
+            'title' => 'Solicitud pendiente de aprobación',
+            'body' => "{$request->number} · ".($request->warehouse?->name ?? ''),
+            'icon' => 'assignment',
+            'route' => '/compras/aprobaciones',
+        ], $user);
+
+        return $request;
     }
 
     public function approve(PurchaseRequest $request, User $user, ?string $comment = null): PurchaseRequest
     {
         $this->assertStatus($request, [S::Enviada], 'aprobar');
 
-        return DB::transaction(function () use ($request, $user, $comment) {
+        $request = DB::transaction(function () use ($request, $user, $comment) {
             $request->forceFill(['status' => S::Aprobada, 'approved_by' => $user->id, 'approved_at' => now()])->save();
             $this->decide($request, $user, 'aprobada', $comment);
 
             return $request;
         });
+        $this->notifyRequester($request, $user, 'aprobada', 'check_circle');
+
+        return $request;
     }
 
     public function reject(PurchaseRequest $request, User $user, string $reason): PurchaseRequest
     {
         $this->assertStatus($request, [S::Enviada], 'rechazar');
 
-        return DB::transaction(function () use ($request, $user, $reason) {
+        $request = DB::transaction(function () use ($request, $user, $reason) {
             $request->forceFill(['status' => S::Rechazada, 'rejection_reason' => $reason])->save();
             $this->decide($request, $user, 'rechazada', $reason);
 
             return $request;
         });
+        $this->notifyRequester($request, $user, 'rechazada', 'error');
+
+        return $request;
+    }
+
+    private function notifyRequester(PurchaseRequest $request, User $decider, string $result, string $icon): void
+    {
+        $requester = User::query()->find($request->requested_by);
+        if (! $requester || ! $requester->is_active || $requester->id === $decider->id) {
+            return;
+        }
+        $this->notifier->send([$requester], [
+            'key' => "sc-decision-{$request->id}-{$result}",
+            'title' => "Solicitud {$result}",
+            'body' => "{$request->number} fue {$result} por {$decider->name}",
+            'icon' => $icon,
+            'route' => "/compras/solicitudes/{$request->id}",
+        ]);
     }
 
     public function cancel(PurchaseRequest $request): PurchaseRequest

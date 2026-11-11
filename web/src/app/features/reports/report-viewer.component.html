@@ -1,0 +1,331 @@
+@if (def(); as d) {
+  <app-page-header [title]="d.title" [subtitle]="d.description" [crumbs]="[{ label: 'Reportes', route: '/reportes' }, { label: d.title }]">
+    <p-button
+      label="Excel"
+      icon="pi pi-file-excel"
+      severity="success"
+      [outlined]="true"
+      [loading]="exporting() === 'xlsx'"
+      [disabled]="exporting() !== null"
+      (onClick)="exportAs('xlsx')"
+    />
+    <p-button
+      label="PDF"
+      icon="pi pi-file-pdf"
+      severity="secondary"
+      [outlined]="true"
+      [loading]="exporting() === 'pdf'"
+      [disabled]="exporting() !== null"
+      (onClick)="exportAs('pdf')"
+    />
+  </app-page-header>
+
+  <!-- ================= Filtros ================= -->
+  <div class="card mb-4">
+    <form class="px-4 py-3 flex flex-wrap items-end gap-3" (ngSubmit)="apply()">
+      @for (f of d.filters; track f) {
+        @switch (f) {
+          @case ('warehouse_id') {
+            <div class="w-52">
+              <label class="field-label">Bodega</label>
+              <p-select
+                [options]="ctx.options()"
+                optionLabel="name"
+                optionValue="id"
+                placeholder="Todas"
+                [showClear]="true"
+                [filter]="ctx.options().length > 8"
+                filterPlaceholder="Buscar bodega…"
+                [ngModel]="warehouseId()"
+                (ngModelChange)="warehouseId.set($event ?? null)"
+                name="warehouse_id"
+                appendTo="body"
+                styleClass="w-full"
+              />
+            </div>
+          }
+          @case ('product_id') {
+            <div class="w-80">
+              <label class="field-label">Producto</label>
+              <app-product-picker [allowCreate]="false" placeholder="Todos los productos" [ngModel]="product()" (ngModelChange)="product.set($event)" name="product_id" />
+            </div>
+          }
+          @case ('category_id') {
+            <div class="w-52">
+              <label class="field-label">Categoría</label>
+              <p-select
+                [options]="categories()"
+                optionLabel="name"
+                optionValue="id"
+                placeholder="Todas"
+                [showClear]="true"
+                [filter]="categories().length > 8"
+                filterPlaceholder="Buscar categoría…"
+                [ngModel]="categoryId()"
+                (ngModelChange)="categoryId.set($event ?? null)"
+                name="category_id"
+                appendTo="body"
+                styleClass="w-full"
+              />
+            </div>
+          }
+          @case ('supplier_id') {
+            <div class="w-60">
+              <label class="field-label">Proveedor</label>
+              <p-select
+                [options]="suppliers()"
+                optionLabel="name"
+                optionValue="id"
+                placeholder="Todos"
+                [showClear]="true"
+                [filter]="suppliers().length > 8"
+                filterPlaceholder="Buscar proveedor…"
+                [ngModel]="supplierId()"
+                (ngModelChange)="supplierId.set($event ?? null)"
+                name="supplier_id"
+                appendTo="body"
+                styleClass="w-full"
+              />
+            </div>
+          }
+          @case ('recipient_id') {
+            <div class="w-60">
+              <label class="field-label">Receptor</label>
+              <p-select
+                [options]="recipients()"
+                optionLabel="name"
+                optionValue="id"
+                placeholder="Todos"
+                [showClear]="true"
+                [filter]="recipients().length > 8"
+                filterPlaceholder="Buscar receptor…"
+                [ngModel]="recipientId()"
+                (ngModelChange)="recipientId.set($event ?? null)"
+                name="recipient_id"
+                appendTo="body"
+                styleClass="w-full"
+              />
+            </div>
+          }
+          @case ('cost_center_id') {
+            <div class="w-60">
+              <label class="field-label">Centro de costo</label>
+              <p-select
+                [options]="costCenters()"
+                optionLabel="name"
+                optionValue="id"
+                placeholder="Todos"
+                [showClear]="true"
+                [filter]="costCenters().length > 8"
+                filterPlaceholder="Buscar centro…"
+                [ngModel]="costCenterId()"
+                (ngModelChange)="costCenterId.set($event ?? null)"
+                name="cost_center_id"
+                appendTo="body"
+                styleClass="w-full"
+              />
+            </div>
+          }
+          @case ('movement_type') {
+            <div class="w-60">
+              <label class="field-label">Tipo de movimiento</label>
+              <p-select
+                [options]="movementTypes()"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Todos"
+                [showClear]="true"
+                [ngModel]="movementType()"
+                (ngModelChange)="movementType.set($event ?? null)"
+                name="movement_type"
+                appendTo="body"
+                styleClass="w-full"
+              />
+            </div>
+          }
+          @case ('novelty_type') {
+            <div class="w-44">
+              <label class="field-label">Tipo de novedad</label>
+              <p-select
+                [options]="noveltyTypeOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Todas"
+                [showClear]="true"
+                [ngModel]="noveltyType()"
+                (ngModelChange)="noveltyType.set($event ?? null)"
+                name="novelty_type"
+                appendTo="body"
+                styleClass="w-full"
+              />
+            </div>
+          }
+          @case ('novelty_status') {
+            <div class="w-40">
+              <label class="field-label">Estado</label>
+              <p-select
+                [options]="noveltyStatusOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Todos"
+                [showClear]="true"
+                [ngModel]="noveltyStatus()"
+                (ngModelChange)="noveltyStatus.set($event ?? null)"
+                name="novelty_status"
+                appendTo="body"
+                styleClass="w-full"
+              />
+            </div>
+          }
+          @case ('priority') {
+            <div class="w-40">
+              <label class="field-label">Prioridad</label>
+              <p-select
+                [options]="priorityOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Todas"
+                [showClear]="true"
+                [ngModel]="priority()"
+                (ngModelChange)="priority.set($event ?? null)"
+                name="priority"
+                appendTo="body"
+                styleClass="w-full"
+              />
+            </div>
+          }
+          @case ('date_from') {
+            <div class="w-40">
+              <label class="field-label">Desde</label>
+              <p-datepicker
+                [ngModel]="dateFrom()"
+                (ngModelChange)="dateFrom.set($event)"
+                name="date_from"
+                dateFormat="dd/mm/yy"
+                [showIcon]="true"
+                [showClear]="true"
+                [maxDate]="dateTo()"
+                appendTo="body"
+                placeholder="Desde"
+                styleClass="w-full"
+                inputStyleClass="w-full"
+              />
+            </div>
+          }
+          @case ('date_to') {
+            <div class="w-40">
+              <label class="field-label">Hasta</label>
+              <p-datepicker
+                [ngModel]="dateTo()"
+                (ngModelChange)="dateTo.set($event)"
+                name="date_to"
+                dateFormat="dd/mm/yy"
+                [showIcon]="true"
+                [showClear]="true"
+                [minDate]="dateFrom()"
+                appendTo="body"
+                placeholder="Hasta"
+                styleClass="w-full"
+                inputStyleClass="w-full"
+              />
+            </div>
+          }
+        }
+      }
+      <div class="flex items-center gap-2 ml-auto">
+        <p-button label="Limpiar" icon="pi pi-filter-slash" [text]="true" severity="secondary" type="button" [disabled]="!hasFormFilters()" (onClick)="clear()" />
+        <p-button label="Aplicar" icon="pi pi-search" type="submit" [loading]="loading()" />
+      </div>
+    </form>
+  </div>
+
+  <!-- ================= Resultado ================= -->
+  @if (result(); as r) {
+    @if (totalChips().length) {
+      <div class="flex flex-wrap gap-3 mb-4">
+        @for (t of totalChips(); track t.key) {
+          <div class="card px-4 py-3 min-w-[150px]">
+            <div class="th-label">{{ t.label }}</div>
+            <div class="text-lg font-bold tabular text-ink mt-0.5">{{ t.value }}</div>
+          </div>
+        }
+      </div>
+    }
+
+    <div class="card overflow-hidden">
+      <div class="px-4 py-3 border-b border-line flex items-center justify-between gap-3">
+        <span class="text-sm font-semibold text-ink truncate">{{ r.title }}</span>
+        <span class="text-xs text-ink-3 tabular shrink-0">{{ r.rows.length }} {{ r.rows.length === 1 ? 'fila' : 'filas' }}</span>
+      </div>
+      <p-table
+        [value]="r.rows"
+        [paginator]="r.rows.length > 25"
+        [rows]="25"
+        [rowsPerPageOptions]="[25, 50, 100]"
+        [loading]="loading()"
+        [showCurrentPageReport]="true"
+        currentPageReportTemplate="{first}–{last} de {totalRecords}"
+        [scrollable]="true"
+        scrollHeight="600px"
+        [tableStyle]="{ 'min-width': tableMinWidth() }"
+      >
+        <ng-template #header>
+          <tr>
+            @for (col of r.columns; track col.key) {
+              <th [pSortableColumn]="col.key" [class.text-right]="isNumeric(col.type)">
+                {{ col.label }}
+                <p-sortIcon [field]="col.key" />
+              </th>
+            }
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-row>
+          <tr>
+            @for (col of r.columns; track col.key) {
+              <td class="text-sm" [class.text-right]="isNumeric(col.type)">
+                @let v = row[col.key];
+                @if (v === null || v === undefined || v === '') {
+                  <span class="text-ink-3">—</span>
+                } @else {
+                  @switch (col.type) {
+                    @case ('money') {
+                      <span class="tabular text-ink">{{ v | currency: 'COP' : 'symbol-narrow' : '1.0-0' }}</span>
+                    }
+                    @case ('qty') {
+                      <span class="tabular text-ink">{{ v | number: '1.0-3' }}</span>
+                    }
+                    @case ('number') {
+                      <span class="tabular text-ink">{{ v | number: '1.0-0' }}</span>
+                    }
+                    @default {
+                      <span class="text-ink-2">{{ v }}</span>
+                    }
+                  }
+                }
+              </td>
+            }
+          </tr>
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td [attr.colspan]="r.columns.length" class="text-center py-12">
+              <div class="flex flex-col items-center gap-2 text-ink-3">
+                <span class="material-symbols-outlined !text-[36px]">search_off</span>
+                <span class="text-sm">Sin resultados para los filtros aplicados.</span>
+                @if (hasFormFilters()) {
+                  <p-button label="Limpiar filtros" icon="pi pi-filter-slash" [text]="true" size="small" (onClick)="clear()" />
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  } @else if (loading()) {
+    <div class="card p-12 text-center text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-2"></i>Generando reporte…</div>
+  }
+} @else {
+  <div class="py-16 text-center text-sm text-ink-3"><i class="pi pi-spin pi-spinner mr-2"></i>Cargando reporte…</div>
+}

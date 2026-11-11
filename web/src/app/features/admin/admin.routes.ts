@@ -18,4 +18,9 @@ export const ADMIN_ROUTES: Routes = [
     data: { permission: 'settings.view' },
     loadComponent: () => import('./settings/settings-page.component').then((m) => m.SettingsPageComponent),
   },
+  {
+    path: 'actividad',
+    data: { permission: 'activity_log.view' },
+    loadComponent: () => import('./activity/activity-page.component').then((m) => m.ActivityPageComponent),
+  },
 ];

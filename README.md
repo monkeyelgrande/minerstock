@@ -108,6 +108,10 @@ Todas las rutas van bajo `/api`. Salvo `health` y `auth/login`, requieren `Autho
 | GET/POST | `/logistics/novelties` (`/counts`, `/{id}/resolve`) | novedades de transporte (faltantes, dañados, sobrantes) |
 | CRUD + acciones | `/consumption/issues` (`/confirm`, `/cancel`, `/pdf`, `/counts`) | vales de salida a receptores con centro de costo |
 | CRUD + acciones | `/consumption/loans` (`/confirm`, `/cancel`, `/returns`, `/holdings`, `/pdf`, `/counts`) | préstamos de herramientas retornables y devoluciones (bueno/dañado/perdido) |
+| GET | `/reports`, `/reports/{key}` (`?export=xlsx\|pdf`) | 9 reportes valorizados con filtros y exportación |
+| GET/POST | `/notifications` (`/read-all`, `/{id}/read`) | notificaciones del usuario (campana del topbar) |
+| GET | `/search?q=` | buscador global por número de documento o producto |
+| GET | `/admin/activity` | log de actividad (quién hizo qué) |
 
 Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.create`, …) y se verifican con el middleware `permission:`.
 
@@ -121,7 +125,7 @@ Los permisos siguen el patrón `recurso.accion` (`products.view`, `suppliers.cre
 | 3 | Cuentas por pagar: facturas con retención, pagos, notas crédito, estado de cuenta | ✅ |
 | 4 | Logística: planillas con despacho al kardex, tránsito, recepción en mina con planilla firmada y novedades | ✅ |
 | 5 | Consumo en mina: vales de salida con PDF, préstamos de herramientas con devoluciones y herramientas por persona | ✅ |
-| 6 | Dashboards, reportes, notificaciones | pendiente |
+| 6 | Reportes con exportación Excel/PDF, notificaciones, buscador global, log de actividad | ✅ |
 
 ## Deploy a producción
 

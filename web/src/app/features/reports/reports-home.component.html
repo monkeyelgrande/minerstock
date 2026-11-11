@@ -1,0 +1,40 @@
+<app-page-header title="Reportes" subtitle="Consultas valorizadas con exportación a Excel y PDF" [crumbs]="[{ label: 'Reportes' }]" />
+
+@if (loading()) {
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+    @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+      <div class="card p-5 flex items-start gap-4 animate-pulse">
+        <div class="w-11 h-11 rounded-lg bg-canvas shrink-0"></div>
+        <div class="flex-1 space-y-2 py-1">
+          <div class="h-3.5 bg-canvas rounded w-2/3"></div>
+          <div class="h-3 bg-canvas rounded w-full"></div>
+        </div>
+      </div>
+    }
+  </div>
+} @else if (reports().length) {
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+    @for (r of reports(); track r.key) {
+      <a
+        [routerLink]="['/reportes', r.key]"
+        class="card p-5 flex items-start gap-4 group transition-all hover:border-[#D1D5DB] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+      >
+        <div class="w-11 h-11 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+          <span class="material-symbols-outlined !text-[24px]">{{ icon(r.key) }}</span>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-semibold text-ink group-hover:text-amber-700 transition-colors">{{ r.title }}</div>
+          <p class="text-xs text-ink-3 mt-1 leading-relaxed">{{ r.description }}</p>
+        </div>
+        <span class="material-symbols-outlined !text-[18px] text-ink-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5">arrow_forward</span>
+      </a>
+    }
+  </div>
+} @else {
+  <div class="card p-12 text-center">
+    <div class="flex flex-col items-center gap-2 text-ink-3">
+      <span class="material-symbols-outlined !text-[36px]">lab_profile</span>
+      <span class="text-sm">No hay reportes disponibles.</span>
+    </div>
+  </div>
+}

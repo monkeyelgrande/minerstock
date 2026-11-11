@@ -7,9 +7,11 @@ use App\Enums\StockMovementType;
 use App\Exceptions\DomainException;
 use App\Models\Shipment;
 use App\Models\ShipmentItem;
+use App\Models\ShipmentNovelty;
 use App\Models\ShipmentReceipt;
 use App\Models\User;
 use App\Services\Inventory\InventoryService;
+use App\Services\Notifications\NotifierService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -108,7 +110,7 @@ class ShipmentReceiptService
             throw new DomainException('Adjunta la foto de la planilla firmada por el chofer antes de confirmar.');
         }
 
-        return DB::transaction(function () use ($receipt, $user) {
+        $receipt = DB::transaction(function () use ($receipt, $user) {
             $receipt->load('items.product', 'shipment.destination');
             $shipment = $receipt->shipment;
             $this->assertOperatesDestination($shipment, $user);
@@ -165,6 +167,21 @@ class ShipmentReceiptService
 
             return $receipt;
         });
+
+        $openNovelties = ShipmentNovelty::query()
+            ->whereIn('shipment_receipt_item_id', $receipt->items()->pluck('id'))
+            ->where('status', 'abierta')->count();
+        if ($openNovelties > 0) {
+            app(NotifierService::class)->notify('novelties.update', [
+                'key' => "rm-novelties-{$receipt->id}",
+                'title' => 'Novedades de transporte abiertas',
+                'body' => "{$openNovelties} ".($openNovelties === 1 ? 'novedad' : 'novedades')." en la recepción {$receipt->number} (planilla {$receipt->shipment->number})",
+                'icon' => 'report_problem',
+                'route' => '/logistica/novedades',
+            ], $user);
+        }
+
+        return $receipt;
     }
 
     /** Anula: revierte el kardex, reabre lo liquidado y elimina las novedades no resueltas. */

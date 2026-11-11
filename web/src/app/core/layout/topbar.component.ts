@@ -6,10 +6,12 @@ import { PopoverModule } from 'primeng/popover';
 
 import { AuthService } from '../auth/auth.service';
 import { WarehouseContext } from '../services/warehouse-context.service';
+import { GlobalSearchComponent } from './global-search.component';
+import { NotificationsPanelComponent } from './notifications-panel.component';
 
 @Component({
   selector: 'app-topbar',
-  imports: [MenuModule, PopoverModule],
+  imports: [MenuModule, PopoverModule, GlobalSearchComponent, NotificationsPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header
@@ -25,16 +27,7 @@ import { WarehouseContext } from '../services/warehouse-context.service';
         >
           <span class="material-symbols-outlined">{{ collapsed() ? 'menu_open' : 'menu' }}</span>
         </button>
-        <div class="relative w-full max-w-md hidden md:flex items-center">
-          <span class="material-symbols-outlined absolute left-3 text-ink-3 pointer-events-none">search</span>
-          <input
-            type="text"
-            class="w-full h-10 pl-10 pr-16 bg-canvas rounded-lg border border-line text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 transition-all"
-            placeholder="Buscar documento o producto…"
-            disabled
-          />
-          <kbd class="absolute right-3 px-1.5 py-0.5 text-[10px] font-semibold bg-line/60 text-ink-3 rounded border border-line-strong/50">Ctrl+K</kbd>
-        </div>
+        <app-global-search />
       </div>
 
       <div class="flex items-center gap-3 shrink-0">
@@ -76,9 +69,7 @@ import { WarehouseContext } from '../services/warehouse-context.service';
 
         <div class="h-6 w-px bg-line"></div>
 
-        <button type="button" class="relative p-2 rounded-lg hover:bg-canvas text-ink-2 transition-colors" aria-label="Notificaciones">
-          <span class="material-symbols-outlined !text-[22px]">notifications</span>
-        </button>
+        <app-notifications-panel />
 
         <!-- Usuario -->
         <button type="button" class="flex items-center gap-2 pl-1 group" (click)="userMenu.toggle($event)">
