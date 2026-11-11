@@ -11,6 +11,7 @@ use App\Models\Shipment;
 use App\Models\ShipmentItem;
 use App\Models\User;
 use App\Services\Inventory\InventoryService;
+use App\Services\Notifications\NotifierService;
 use App\Services\Purchasing\LineItems;
 use App\Services\Purchasing\PurchaseRequestService;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,7 @@ class ShipmentService
     public function __construct(
         private readonly InventoryService $inventory,
         private readonly PurchaseRequestService $requests,
+        private readonly NotifierService $notifier,
     ) {}
 
     /** Crea o actualiza una planilla en borrador. */
@@ -94,7 +96,7 @@ class ShipmentService
             throw new DomainException('La planilla no tiene ítems.');
         }
 
-        return DB::transaction(function () use ($shipment, $user) {
+        $shipment = DB::transaction(function () use ($shipment, $user) {
             foreach ($shipment->items()->get() as $item) {
                 $movement = $this->inventory->move(
                     $shipment->origin_warehouse_id,
@@ -124,6 +126,16 @@ class ShipmentService
 
             return $shipment;
         });
+
+        $this->notifier->notify('shipment_receipts.create', [
+            'key' => "pl-dispatch-{$shipment->id}",
+            'title' => 'Planilla despachada hacia tu bodega',
+            'body' => "{$shipment->number} · {$shipment->origin->code} → {$shipment->destination->code}",
+            'icon' => 'local_shipping',
+            'route' => '/logistica/recepcion',
+        ], $user, $shipment->destination_warehouse_id);
+
+        return $shipment;
     }
 
     /** Anula: en borrador directo; despachada sin recepciones revierte el kardex y las solicitudes. */

@@ -1,0 +1,173 @@
+<app-page-header
+  title="Log de actividad"
+  subtitle="Quién hizo qué y cuándo"
+  [crumbs]="[{ label: 'Administración' }, { label: 'Log de actividad' }]"
+/>
+
+<!-- ================= Filtros ================= -->
+<div class="card mb-4">
+  <div class="px-4 py-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-3 items-end">
+    <div class="xl:col-span-3">
+      <label class="field-label" for="activity-search">Buscar</label>
+      <span class="relative block">
+        <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 !text-[18px] text-ink-3 pointer-events-none">search</span>
+        <input
+          pInputText
+          id="activity-search"
+          type="text"
+          class="w-full !pl-9"
+          placeholder="Descripción o número…"
+          [ngModel]="search()"
+          (ngModelChange)="onSearch($event)"
+        />
+      </span>
+    </div>
+    <div class="xl:col-span-2">
+      <label class="field-label">Usuario</label>
+      <p-select
+        [options]="users()"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Todos"
+        [filter]="true"
+        [showClear]="true"
+        [ngModel]="userId()"
+        (ngModelChange)="setFilter(userId, $event)"
+        styleClass="w-full"
+        appendTo="body"
+      />
+    </div>
+    <div class="xl:col-span-2">
+      <label class="field-label">Documento</label>
+      <p-select
+        [options]="subjectTypes()"
+        placeholder="Todos"
+        [showClear]="true"
+        [ngModel]="subjectType()"
+        (ngModelChange)="setFilter(subjectType, $event)"
+        styleClass="w-full"
+        appendTo="body"
+      />
+    </div>
+    <div class="xl:col-span-2">
+      <label class="field-label">Evento</label>
+      <p-select
+        [options]="eventOptions"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Todos"
+        [showClear]="true"
+        [ngModel]="event()"
+        (ngModelChange)="setFilter(event, $event)"
+        styleClass="w-full"
+        appendTo="body"
+      />
+    </div>
+    <div class="xl:col-span-3 grid grid-cols-2 gap-2">
+      <div>
+        <label class="field-label">Desde</label>
+        <p-datepicker
+          [ngModel]="dateFrom()"
+          (ngModelChange)="setFilter(dateFrom, $event)"
+          dateFormat="dd/mm/yy"
+          [showIcon]="true"
+          [showClear]="true"
+          [maxDate]="dateTo()"
+          appendTo="body"
+          placeholder="Desde"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </div>
+      <div>
+        <label class="field-label">Hasta</label>
+        <p-datepicker
+          [ngModel]="dateTo()"
+          (ngModelChange)="setFilter(dateTo, $event)"
+          dateFormat="dd/mm/yy"
+          [showIcon]="true"
+          [showClear]="true"
+          [minDate]="dateFrom()"
+          appendTo="body"
+          placeholder="Hasta"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Listado ================= -->
+<div class="card overflow-hidden">
+  <p-table
+    [value]="rows()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [paginator]="true"
+    [rows]="perPage()"
+    [first]="first"
+    [totalRecords]="total()"
+    [rowsPerPageOptions]="[10, 20, 50]"
+    [loading]="loading()"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} de {totalRecords}"
+    dataKey="entry.id"
+  >
+    <ng-template #header>
+      <tr>
+        <th class="w-36">Fecha</th>
+        <th class="w-44">Usuario</th>
+        <th class="w-32">Acción</th>
+        <th class="w-52">Documento</th>
+        <th class="min-w-[260px]">Cambios</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-r>
+      <tr>
+        <td class="tabular text-ink-2 whitespace-nowrap align-top">{{ r.entry.created_at | date: 'dd/MM/yyyy HH:mm' }}</td>
+        <td class="align-top">
+          <span class="text-sm text-ink">{{ r.entry.causer?.name ?? 'Sistema' }}</span>
+        </td>
+        <td class="align-top">
+          @if (r.actionLabel) {
+            <app-chip [tone]="r.actionTone" [label]="r.actionLabel" />
+          } @else {
+            <span class="text-sm text-ink-2">{{ r.entry.description || '—' }}</span>
+          }
+        </td>
+        <td class="align-top">
+          @if (r.doc) {
+            <span class="text-sm text-ink">{{ r.doc }}</span>
+          } @else {
+            <span class="text-ink-3">—</span>
+          }
+        </td>
+        <td class="align-top">
+          @if (r.lines.length > 0) {
+            <div class="flex flex-col gap-0.5">
+              @for (line of r.lines; track $index) {
+                <span class="text-xs text-ink-2 font-mono break-all">{{ line }}</span>
+              }
+              @if (r.more > 0) {
+                <span class="text-xs text-ink-3">+{{ r.more }} más</span>
+              }
+            </div>
+          } @else {
+            <span class="text-ink-3 text-sm">—</span>
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="5" class="text-center py-12">
+          <div class="flex flex-col items-center gap-2 text-ink-3">
+            <span class="material-symbols-outlined !text-[36px]">history</span>
+            <span class="text-sm">No hay actividad que coincida con los filtros.</span>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

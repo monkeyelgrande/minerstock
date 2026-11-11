@@ -64,6 +64,10 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: 'Reportes',
+    items: [{ label: 'Reportes', icon: 'monitoring', route: '/reportes', permission: 'reports.view' }],
+  },
+  {
     title: 'Catálogo',
     items: [
       { label: 'Productos', icon: 'inventory_2', route: '/catalogo/productos', permission: 'products.view' },
@@ -84,6 +88,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: 'Usuarios', icon: 'manage_accounts', route: '/admin/usuarios', permission: 'users.view' },
       { label: 'Roles y permisos', icon: 'admin_panel_settings', route: '/admin/roles', permission: 'roles.view' },
       { label: 'Configuración', icon: 'settings', route: '/admin/configuracion', permission: 'settings.view' },
+      { label: 'Log de actividad', icon: 'history', route: '/admin/actividad', permission: 'activity_log.view' },
     ],
   },
 ];

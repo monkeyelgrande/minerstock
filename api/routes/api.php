@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\ActivityLogController;
 use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\SettingController;
 use App\Http\Controllers\Api\Admin\UserController;
@@ -27,6 +28,7 @@ use App\Http\Controllers\Api\Inventory\SupplierReturnController;
 use App\Http\Controllers\Api\Logistics\NoveltyController;
 use App\Http\Controllers\Api\Logistics\ShipmentController;
 use App\Http\Controllers\Api\Logistics\ShipmentReceiptController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\Payables\CreditNoteController;
 use App\Http\Controllers\Api\Payables\StatementController;
 use App\Http\Controllers\Api\Payables\SupplierInvoiceController;
@@ -36,6 +38,8 @@ use App\Http\Controllers\Api\Purchasing\ComparisonController;
 use App\Http\Controllers\Api\Purchasing\PurchaseOrderController;
 use App\Http\Controllers\Api\Purchasing\PurchaseRequestController;
 use App\Http\Controllers\Api\Purchasing\QuotationController;
+use App\Http\Controllers\Api\Reports\ReportController;
+use App\Http\Controllers\Api\SearchController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -60,6 +64,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/auth/password', [AuthController::class, 'changePassword'])->name('auth.password');
 
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+
+    // Buscador global y notificaciones del usuario
+    Route::get('/search', SearchController::class)->name('search');
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
+
+    // Reportes
+    Route::get('/reports', [ReportController::class, 'index'])->middleware('permission:reports.view')->name('reports.index');
+    Route::get('/reports/{key}', [ReportController::class, 'show'])->middleware('permission:reports.view')->name('reports.show');
 
     // Catálogo (maestros)
     Route::prefix('catalog')->name('catalog.')->group(function () {
@@ -286,6 +300,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('roles', [RoleController::class, 'index'])->middleware('permission:roles.view')->name('roles.index');
         Route::get('permissions', [RoleController::class, 'permissions'])->middleware('permission:roles.view')->name('permissions.index');
         Route::put('roles/{id}', [RoleController::class, 'update'])->middleware('permission:roles.update')->name('roles.update');
+
+        Route::get('activity', [ActivityLogController::class, 'index'])->middleware('permission:activity_log.view')->name('activity.index');
 
         Route::get('settings', [SettingController::class, 'index'])->middleware('permission:settings.view')->name('settings.index');
         Route::put('settings', [SettingController::class, 'update'])->middleware('permission:settings.update')->name('settings.update');
